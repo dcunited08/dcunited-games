@@ -122,20 +122,12 @@
 </div>
 <p class="help">Arrow keys or WASD to move, Space or P to pause. Swipe on touch screens.</p>
 
+<script src="logic.js"></script>
 <script>
 (() => {
-  const GRID = 20;
-  const START_STEP_MS = 140;
-  const MIN_STEP_MS = 60;
-  const SPEEDUP_MS = 4;
+  const { GRID, createState, queueTurn, step: advance, swipeDirection } = window.SnakeLogic;
   const BEST_KEY = 'dcunited-games.snake.best';
 
-  const DIRS = {
-    up: { x: 0, y: -1 },
-    down: { x: 0, y: 1 },
-    left: { x: -1, y: 0 },
-    right: { x: 1, y: 0 },
-  };
   const KEYS = {
     ArrowUp: 'up', KeyW: 'up',
     ArrowDown: 'down', KeyS: 'down',
@@ -153,7 +145,7 @@
   const overlayText = document.getElementById('overlay-text');
   const startBtn = document.getElementById('start');
 
-  let snake, dir, queue, food, score, stepMs, state, lastStep;
+  let game, state, lastStep;
   let best = loadBest();
   bestEl.textContent = best;
 
@@ -165,57 +157,20 @@
   }
 
   function reset() {
-    const mid = Math.floor(GRID / 2);
-    snake = [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
-    dir = DIRS.right;
-    queue = [];
-    score = 0;
-    stepMs = START_STEP_MS;
-    scoreEl.textContent = score;
-    placeFood();
+    game = createState();
+    scoreEl.textContent = game.score;
   }
 
-  function placeFood() {
-    const free = [];
-    for (let y = 0; y < GRID; y++) {
-      for (let x = 0; x < GRID; x++) {
-        if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
-      }
-    }
-    food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
-  }
-
-  // Queue turns so two quick key presses within one tick both register,
-  // and reject any turn that would reverse into the snake's own neck.
   function turn(name) {
     if (state === 'ready' || state === 'over') start();
-    if (state !== 'playing') return;
-    const next = DIRS[name];
-    const last = queue.length ? queue[queue.length - 1] : dir;
-    if (next === last || (next.x === -last.x && next.y === -last.y)) return;
-    if (queue.length < 3) queue.push(next);
+    if (state === 'playing') queueTurn(game, name);
   }
 
   function step() {
-    if (queue.length) dir = queue.shift();
-    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-    const eating = food && head.x === food.x && head.y === food.y;
-    // The tail moves away this tick unless we're growing, so it's safe to enter.
-    const body = eating ? snake : snake.slice(0, -1);
-    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID ||
-        body.some(s => s.x === head.x && s.y === head.y)) {
-      return gameOver();
-    }
-    snake.unshift(head);
-    if (eating) {
-      score++;
-      scoreEl.textContent = score;
-      stepMs = Math.max(MIN_STEP_MS, stepMs - SPEEDUP_MS);
-      placeFood();
-      if (!food) return gameOver(true);
-    } else {
-      snake.pop();
-    }
+    const result = advance(game);
+    scoreEl.textContent = game.score;
+    if (result === 'dead') gameOver();
+    else if (result === 'won') gameOver(true);
   }
 
   function draw() {
@@ -227,6 +182,7 @@
         ctx.fillRect(x * cell, y * cell, cell, cell);
       }
     }
+    const { food, snake } = game;
     if (food) {
       ctx.fillStyle = getVar('--food');
       ctx.beginPath();
@@ -256,7 +212,7 @@
 
   function loop(t) {
     if (state !== 'playing') return;
-    if (t - lastStep >= stepMs) {
+    if (t - lastStep >= game.stepMs) {
       lastStep = t;
       step();
       draw();
@@ -285,12 +241,12 @@
   function gameOver(won = false) {
     state = 'over';
     draw();
-    if (score > best) {
-      best = score;
+    if (game.score > best) {
+      best = game.score;
       bestEl.textContent = best;
       saveBest(best);
     }
-    showOverlay(won ? 'You win!' : 'Game over', `Score: ${score}`, 'Play again');
+    showOverlay(won ? 'You win!' : 'Game over', `Score: ${game.score}`, 'Play again');
   }
 
   function showOverlay(title, text, button) {
@@ -328,8 +284,8 @@
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
     touchStart = null;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
-    turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    const name = swipeDirection(dx, dy);
+    if (name) turn(name);
   });
 
   document.addEventListener('visibilitychange', () => {

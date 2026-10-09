@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Fails if any test fails or coverage drops below the thresholds in package.json.
+      - name: Run tests with coverage
+        run: npm test 2>&1 | tee test-output.txt
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '## Coverage'
+            echo '```'
+            sed -n '/start of coverage report/,/end of coverage report/p' test-output.txt | sed 's/^# //'
+            grep -i 'does not meet threshold' test-output.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
