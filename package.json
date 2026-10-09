@@ -1,0 +1,8 @@
+{
+  "name": "dcunited-games",
+  "private": true,
+  "description": "Games that run in the browser",
+  "scripts": {
+    "test": "node --test"
+  }
+}
