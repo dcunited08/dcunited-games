@@ -16,4 +16,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm test
+      # Fails if any test fails or coverage drops below the thresholds in package.json.
+      - name: Run tests with coverage
+        run: npm test 2>&1 | tee test-output.txt
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '## Coverage'
+            echo '```'
+            sed -n '/start of coverage report/,/end of coverage report/p' test-output.txt | sed 's/^# //'
+            grep -i 'does not meet threshold' test-output.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

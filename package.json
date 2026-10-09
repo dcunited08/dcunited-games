@@ -3,6 +3,6 @@
   "private": true,
   "description": "Games that run in the browser",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test --experimental-test-coverage --test-coverage-exclude='**/*.test.js' --test-coverage-lines=90 --test-coverage-branches=90 --test-coverage-functions=90"
   }
 }

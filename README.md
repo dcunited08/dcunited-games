@@ -14,7 +14,7 @@ Game rules live in plain JS modules next to each game (for example `games/snake/
 npm test        # or: node --test
 ```
 
-Tests run on every pull request and push to `main` via `.github/workflows/test.yml`.
+`npm test` also measures coverage of the game logic and fails if line, branch or function coverage drops below 90% (thresholds live in `package.json`). Tests and the coverage check run on every pull request and push to `main` via `.github/workflows/test.yml`, and the coverage table shows up in the run's summary.
 
 ## Playing online
 
