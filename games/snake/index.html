@@ -79,6 +79,9 @@
   button:hover { background: var(--preview); }
   #start { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
   #start:hover { background: var(--accent-hover); }
+  #autoplay { padding: 6px 12px; font-size: 14px; }
+  #autoplay[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  #autoplay[aria-pressed="true"]:hover { background: var(--accent-hover); }
   .dpad {
     display: grid;
     grid-template-columns: repeat(3, 56px);
@@ -102,6 +105,7 @@
 </nav>
 <header>
   <h1>Snake</h1>
+  <button id="autoplay" aria-pressed="false" title="Let the snake steer itself (T)">Autoplay: Off</button>
 </header>
 <div class="scores">
   <span>Score <b id="score">0</b></span>
@@ -121,12 +125,14 @@
   <button data-dir="down" aria-label="Down">▼</button>
   <button data-dir="right" aria-label="Right">▶</button>
 </div>
-<p class="help">Arrow keys or WASD to move, Space or P to pause. Swipe on touch screens.</p>
+<p class="help">Arrow keys or WASD to move, Space or P to pause. Swipe on touch screens. T toggles autoplay; steering yourself takes back control.</p>
 
 <script src="logic.js"></script>
+<script src="autopilot.js"></script>
 <script>
 (() => {
   const { GRID, createState, queueTurn, step: advance, swipeDirection } = window.SnakeLogic;
+  const { autoSteer } = window.SnakeAutopilot;
   const BEST_KEY = 'dcunited-games.snake.best';
 
   const KEYS = {
@@ -145,8 +151,12 @@
   const overlayTitle = document.getElementById('overlay-title');
   const overlayText = document.getElementById('overlay-text');
   const startBtn = document.getElementById('start');
+  const autoBtn = document.getElementById('autoplay');
 
   let game, state, lastStep;
+  // `assisted` marks a game where autoplay was on at any point; those scores
+  // don't count toward Best.
+  let autoplay = false, assisted = false;
   let best = loadBest();
   bestEl.textContent = best;
 
@@ -160,14 +170,29 @@
   function reset() {
     game = createState();
     scoreEl.textContent = game.score;
+    assisted = autoplay;
+  }
+
+  function setAutoplay(on) {
+    autoplay = on;
+    if (on) assisted = true;
+    autoBtn.setAttribute('aria-pressed', String(on));
+    autoBtn.textContent = on ? 'Autoplay: On' : 'Autoplay: Off';
+  }
+
+  function toggleAutoplay() {
+    setAutoplay(!autoplay);
+    if (autoplay && (state === 'ready' || state === 'over')) start();
   }
 
   function turn(name) {
+    if (autoplay) setAutoplay(false);
     if (state === 'ready' || state === 'over') start();
     if (state === 'playing') queueTurn(game, name);
   }
 
   function step() {
+    if (autoplay) autoSteer(game);
     const result = advance(game);
     scoreEl.textContent = game.score;
     if (result === 'dead') gameOver();
@@ -242,12 +267,13 @@
   function gameOver(won = false) {
     state = 'over';
     draw();
-    if (game.score > best) {
+    if (!assisted && game.score > best) {
       best = game.score;
       bestEl.textContent = best;
       saveBest(best);
     }
-    showOverlay(won ? 'You win!' : 'Game over', `Score: ${game.score}`, 'Play again');
+    const note = assisted ? ' (autoplay, not counted for Best)' : '';
+    showOverlay(won ? 'You win!' : 'Game over', `Score: ${game.score}${note}`, 'Play again');
   }
 
   function showOverlay(title, text, button) {
@@ -262,6 +288,9 @@
     if (KEYS[e.code]) {
       e.preventDefault();
       turn(KEYS[e.code]);
+    } else if (e.code === 'KeyT') {
+      e.preventDefault();
+      toggleAutoplay();
     } else if (e.code === 'Space' || e.code === 'KeyP') {
       e.preventDefault();
       if (state === 'ready' || state === 'over') start(); else pause();
@@ -269,6 +298,7 @@
   });
 
   startBtn.addEventListener('click', () => start());
+  autoBtn.addEventListener('click', () => { toggleAutoplay(); autoBtn.blur(); });
 
   document.querySelectorAll('.dpad button').forEach(b => {
     b.addEventListener('pointerdown', e => { e.preventDefault(); turn(b.dataset.dir); });
