@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snake</title>
+<link rel="stylesheet" href="../shared.css">
 <style>
   :root {
     --bg: #10141a;
@@ -35,8 +36,6 @@
     justify-content: space-between;
     align-items: baseline;
   }
-  header a { color: var(--muted); text-decoration: none; font-size: 14px; }
-  header a:hover { color: var(--text); }
   h1 { margin: 0; font-size: 24px; }
   .scores {
     width: min(100%, 480px);
@@ -98,9 +97,11 @@
 </style>
 </head>
 <body>
+<nav class="game-nav">
+  <a class="back-link" href="../../index.html">← All games</a>
+</nav>
 <header>
   <h1>Snake</h1>
-  <a href="../../index.html">All games</a>
 </header>
 <div class="scores">
   <span>Score <b id="score">0</b></span>
