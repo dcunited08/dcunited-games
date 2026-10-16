@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chickens vs Pigs</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  :root {
+    --straw: #f6e7bd;
+    --dirt: #a8794f;
+    --fence: #7a5233;
+    --chicken: #ffffff;
+    --pig: #f9a8c4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+  header, .controls, .status, .board { width: min(100%, 520px); }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h1 { margin: 0; font-size: 24px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .controls label { font-size: 14px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  .controls label[hidden] { display: none; }
+  select, button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--preview); }
+  .primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .primary:hover { background: var(--accent-hover); }
+  .status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  #turn { color: var(--text); font-weight: 700; font-size: 16px; }
+  .pen b { color: var(--text); }
+  .board { position: relative; }
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border: 6px solid var(--fence);
+    border-radius: 10px;
+    touch-action: manipulation;
+  }
+  canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(242, 248, 255, 0.88);
+    border-radius: 10px;
+    text-align: center;
+    padding: 16px;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 { margin: 0; font-size: 28px; }
+  .overlay p { margin: 0; color: var(--muted); }
+  .help { color: var(--muted); font-size: 13px; margin: 0; text-align: center; max-width: 520px; }
+</style>
+</head>
+<body>
+<nav class="game-nav">
+  <a class="back-link" href="../../index.html">← All games</a>
+</nav>
+<header>
+  <h1>Chickens vs Pigs</h1>
+  <button id="new-game" class="primary">New game</button>
+</header>
+<div class="controls">
+  <label>Play
+    <select id="mode">
+      <option value="ai">vs computer</option>
+      <option value="two">2 players</option>
+    </select>
+  </label>
+  <label id="side-label">as
+    <select id="side">
+      <option value="chicken">Chickens 🐔</option>
+      <option value="pig">Pigs 🐷</option>
+    </select>
+  </label>
+  <label id="level-label">Level
+    <select id="level">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </label>
+</div>
+<div class="status">
+  <span class="pen" title="Pigs the chickens have captured">🐔 pen: <b id="chicken-pen">0</b> 🐷</span>
+  <span id="turn" aria-live="polite">Chickens' turn</span>
+  <span class="pen" title="Chickens the pigs have captured">🐷 pen: <b id="pig-pen">0</b> 🐔</span>
+</div>
+<div class="board">
+  <canvas id="game" width="640" height="640" tabindex="0" aria-label="Checkers board"></canvas>
+  <div class="overlay" id="overlay" hidden>
+    <h2 id="overlay-title"></h2>
+    <p id="overlay-text"></p>
+    <button id="again" class="primary">Play again</button>
+  </div>
+</div>
+<p class="help">Tap a piece, then tap where it should go. Jumps are required: pieces that must jump are ringed in gold. Reach the far row to become a Rooster or a Boar, who can move backwards. Keyboard: arrow keys move the cursor, Enter or Space picks and drops, Esc cancels.</p>
+
+<script src="logic.js"></script>
+<script src="ai.js"></script>
+<script>
+(() => {
+  const {
+    SIZE, CHICKEN, PIG, createState, legalMoves, applyMove, winner,
+    movesFrom, findMove, landing, countPieces, isDark, squareAt, moveCursor,
+  } = window.ChickensPigsLogic;
+  const { DIFFICULTY, chooseMove } = window.ChickensPigsAI;
+  const WINS_KEY = 'dcunited-games.chickens-vs-pigs.wins';
+  const HOP_MS = 220;
+  const AI_DELAY_MS = 350;
+  const NAMES = { [CHICKEN]: 'Chickens', [PIG]: 'Pigs' };
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const cell = canvas.width / SIZE;
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => css.getPropertyValue(name).trim();
+  const COLORS = {
+    straw: color('--straw'), dirt: color('--dirt'), chicken: color('--chicken'),
+    pig: color('--pig'), accent: color('--accent'), highlight: color('--highlight'),
+  };
+
+  const el = (id) => document.getElementById(id);
+  const modeEl = el('mode'), sideEl = el('side'), levelEl = el('level');
+  const turnEl = el('turn');
+  const overlay = el('overlay');
+
+  let state, moves, selected, cursor, lastMove, anim, busy, over, aiTimer;
+
+  const vsComputer = () => modeEl.value === 'ai';
+  const human = () => sideEl.value;
+  const flipped = () => vsComputer() && human() === PIG;
+  const computerToMove = () => vsComputer() && state.turn !== human();
+  const same = (a, b) => a && b && a.r === b.r && a.c === b.c;
+
+  function newGame() {
+    clearTimeout(aiTimer);
+    state = createState();
+    moves = legalMoves(state);
+    selected = null;
+    lastMove = null;
+    anim = null;
+    busy = false;
+    over = false;
+    cursor = flipped() ? { r: 2, c: 1 } : { r: 5, c: 0 };
+    overlay.hidden = true;
+    el('side-label').hidden = !vsComputer();
+    el('level-label').hidden = !vsComputer();
+    updateStatus();
+    draw();
+    maybeComputerTurn();
+  }
+
+  function updateStatus() {
+    const counts = countPieces(state);
+    el('chicken-pen').textContent = 12 - counts[PIG];
+    el('pig-pen').textContent = 12 - counts[CHICKEN];
+    const who = NAMES[state.turn];
+    const icon = state.turn === CHICKEN ? '🐔' : '🐷';
+    turnEl.textContent = computerToMove() ? `${who} are thinking… ${icon}` : `${who}' turn ${icon}`;
+  }
+
+  function maybeComputerTurn() {
+    if (over || !computerToMove()) return;
+    busy = true;
+    aiTimer = setTimeout(() => {
+      const move = chooseMove(state, DIFFICULTY[levelEl.value]);
+      play(move);
+    }, AI_DELAY_MS);
+  }
+
+  // Animates the hop chain, then commits the move.
+  function play(move) {
+    busy = true;
+    selected = null;
+    const piece = state.board[move.from.r][move.from.c];
+    anim = { move, piece, start: performance.now() };
+    requestAnimationFrame(tick);
+  }
+
+  function tick(now) {
+    const hops = anim.move.path.length;
+    if (now - anim.start >= hops * HOP_MS) {
+      finishMove(anim.move);
+      return;
+    }
+    draw(now);
+    requestAnimationFrame(tick);
+  }
+
+  function finishMove(move) {
+    state = applyMove(state, move);
+    moves = legalMoves(state);
+    lastMove = move;
+    anim = null;
+    busy = false;
+    updateStatus();
+    draw();
+    const result = winner(state);
+    if (result) return gameOver(result);
+    maybeComputerTurn();
+  }
+
+  function gameOver(result) {
+    over = true;
+    let title, text;
+    if (result === 'draw') {
+      title = "It's a draw";
+      text = 'Nobody could break through the fence.';
+    } else {
+      title = result === CHICKEN ? 'Chickens win! 🐔' : 'Pigs win! 🐷';
+      text = result === CHICKEN ? 'The pigs have been out-clucked.' : 'The chickens have been out-oinked.';
+      if (vsComputer()) {
+        if (result === human()) {
+          saveWin();
+          text = `You beat the computer on ${levelEl.value}.`;
+        } else {
+          text = 'The computer won this time.';
+        }
+      }
+    }
+    turnEl.textContent = title;
+    el('overlay-title').textContent = title;
+    el('overlay-text').textContent = text;
+    overlay.hidden = false;
+    el('again').focus();
+  }
+
+  function saveWin() {
+    try {
+      const wins = (Number(localStorage.getItem(WINS_KEY)) || 0) + 1;
+      localStorage.setItem(WINS_KEY, String(wins));
+    } catch {}
+  }
+
+  // Clicking or pressing Enter on a square.
+  function choose(square) {
+    if (busy || over || computerToMove() || !square) return;
+    const piece = state.board[square.r][square.c];
+    if (piece && piece.side === state.turn) {
+      selected = movesFrom(moves, square).length ? square : null;
+      draw();
+      return;
+    }
+    if (selected) {
+      const move = findMove(moves, selected, square);
+      if (move) return play(move);
+      selected = null;
+      draw();
+    }
+  }
+
+  // ---------- drawing ----------
+
+  // Board square -> top-left pixel on the canvas.
+  function toPixel({ r, c }) {
+    return flipped()
+      ? { x: (SIZE - 1 - c) * cell, y: (SIZE - 1 - r) * cell }
+      : { x: c * cell, y: r * cell };
+  }
+
+  function draw(now = performance.now()) {
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const { x, y } = toPixel({ r, c });
+        ctx.fillStyle = isDark(r, c) ? COLORS.dirt : COLORS.straw;
+        ctx.fillRect(x, y, cell, cell);
+      }
+    }
+
+    if (lastMove && !anim) {
+      for (const sq of [lastMove.from, landing(lastMove)]) shade(sq, 'rgba(255, 255, 255, 0.18)');
+    }
+
+    // Gold rings on pieces that must jump.
+    if (!anim && !over && !computerToMove() && moves.length && moves[0].captures.length) {
+      const pulse = 0.55 + 0.45 * Math.sin(now / 250);
+      for (const m of moves) ring(m.from, `rgba(250, 204, 21, ${pulse})`, 5);
+    }
+
+    if (selected) {
+      ring(selected, COLORS.accent, 5);
+      for (const m of movesFrom(moves, selected)) dot(landing(m));
+    }
+
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const piece = state.board[r][c];
+        if (!piece) continue;
+        if (anim && same(anim.move.from, { r, c })) continue;
+        const { x, y } = toPixel({ r, c });
+        let fade = 1;
+        if (anim) {
+          const idx = anim.move.captures.findIndex((s) => s.r === r && s.c === c);
+          if (idx !== -1) fade = Math.max(0, 1 - ((now - anim.start) / HOP_MS - idx));
+        }
+        if (fade > 0) drawPiece(piece, x + cell / 2, y + cell / 2, fade);
+      }
+    }
+
+    if (anim) drawAnimatedPiece(now);
+
+    if (!over && !computerToMove() && document.activeElement === canvas) {
+      ring(cursor, COLORS.highlight, 3, true);
+    }
+
+    // Keep the gold rings pulsing while a human has to jump.
+    if (!anim && !over && !computerToMove() && moves.length && moves[0].captures.length) {
+      cancelAnimationFrame(draw.raf);
+      draw.raf = requestAnimationFrame((t) => draw(t));
+    }
+  }
+
+  function drawAnimatedPiece(now) {
+    const { move, piece } = anim;
+    // rAF timestamps can be a little earlier than the start time.
+    const t = Math.max(0, (now - anim.start) / HOP_MS);
+    const i = Math.min(Math.floor(t), move.path.length - 1);
+    const f = Math.min(1, t - i);
+    const a = toPixel(i === 0 ? move.from : move.path[i - 1]);
+    const b = toPixel(move.path[i]);
+    const x = a.x + (b.x - a.x) * f + cell / 2;
+    const y = a.y + (b.y - a.y) * f + cell / 2;
+    const lift = Math.sin(f * Math.PI) * cell * 0.25;
+    drawPiece(piece, x, y - lift, 1);
+  }
+
+  function shade(sq, fill) {
+    const { x, y } = toPixel(sq);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, cell, cell);
+  }
+
+  function ring(sq, stroke, width, square = false) {
+    const { x, y } = toPixel(sq);
+    ctx.save();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    if (square) ctx.rect(x + 3, y + 3, cell - 6, cell - 6);
+    else ctx.arc(x + cell / 2, y + cell / 2, cell * 0.44, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function dot(sq) {
+    const { x, y } = toPixel(sq);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.beginPath();
+    ctx.arc(x + cell / 2, y + cell / 2, cell * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function circle(x, y, r, fill) {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawPiece(piece, x, y, alpha) {
+    const s = cell * 0.38;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + s * 0.85, s * 0.85, s * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (piece.side === CHICKEN) drawChicken(x, y, s, piece.king);
+    else drawPig(x, y, s);
+    if (piece.king) drawCrown(x, y - s * (piece.side === CHICKEN ? 1.15 : 1.0), s);
+    ctx.restore();
+  }
+
+  function drawChicken(x, y, s, rooster) {
+    // Comb (bigger on a Rooster)
+    const combR = rooster ? 0.28 : 0.2;
+    for (const dx of [-0.25, 0, 0.25]) circle(x + dx * s, y - s * 0.85, s * combR, '#dc2626');
+    circle(x, y, s, COLORS.chicken);
+    ctx.strokeStyle = '#d6d3d1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, s, 0, Math.PI * 2);
+    ctx.stroke();
+    // Eyes
+    circle(x - s * 0.35, y - s * 0.2, s * 0.12, '#1c1917');
+    circle(x + s * 0.35, y - s * 0.2, s * 0.12, '#1c1917');
+    // Beak
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.22, y + s * 0.05);
+    ctx.lineTo(x + s * 0.22, y + s * 0.05);
+    ctx.lineTo(x, y + s * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    // Wattle
+    circle(x, y + s * 0.55, s * 0.12, '#dc2626');
+  }
+
+  function drawPig(x, y, s) {
+    // Ears
+    ctx.fillStyle = '#ec7fa6';
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(x + dir * s * 0.35, y - s * 0.75);
+      ctx.lineTo(x + dir * s * 0.95, y - s * 1.05);
+      ctx.lineTo(x + dir * s * 0.8, y - s * 0.35);
+      ctx.closePath();
+      ctx.fill();
+    }
+    circle(x, y, s, COLORS.pig);
+    // Eyes
+    circle(x - s * 0.38, y - s * 0.25, s * 0.11, '#1c1917');
+    circle(x + s * 0.38, y - s * 0.25, s * 0.11, '#1c1917');
+    // Snout
+    ctx.fillStyle = '#ec7fa6';
+    ctx.beginPath();
+    ctx.ellipse(x, y + s * 0.25, s * 0.42, s * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    circle(x - s * 0.15, y + s * 0.25, s * 0.08, '#9d174d');
+    circle(x + s * 0.15, y + s * 0.25, s * 0.08, '#9d174d');
+  }
+
+  function drawCrown(x, y, s) {
+    const w = s * 0.9, h = s * 0.45;
+    ctx.fillStyle = '#facc15';
+    ctx.strokeStyle = '#a16207';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y + h / 2);
+    ctx.lineTo(x - w / 2, y - h / 2);
+    ctx.lineTo(x - w / 4, y);
+    ctx.lineTo(x, y - h / 2);
+    ctx.lineTo(x + w / 4, y);
+    ctx.lineTo(x + w / 2, y - h / 2);
+    ctx.lineTo(x + w / 2, y + h / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // ---------- input ----------
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const border = canvas.clientLeft;
+    const scale = canvas.width / canvas.clientWidth;
+    const x = (e.clientX - rect.left - border) * scale;
+    const y = (e.clientY - rect.top - border) * scale;
+    const square = squareAt(x, y, canvas.width, flipped());
+    if (square) cursor = square;
+    choose(square);
+  });
+
+  const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  canvas.addEventListener('keydown', (e) => {
+    if (KEYS[e.code]) {
+      cursor = moveCursor(cursor, KEYS[e.code], flipped());
+      draw();
+    } else if (e.code === 'Enter' || e.code === 'Space') {
+      choose(cursor);
+    } else if (e.code === 'Escape') {
+      selected = null;
+      draw();
+    } else {
+      return;
+    }
+    e.preventDefault();
+  });
+  canvas.addEventListener('focus', () => draw());
+  canvas.addEventListener('blur', () => draw());
+
+  el('new-game').addEventListener('click', newGame);
+  el('again').addEventListener('click', () => { newGame(); canvas.focus(); });
+  modeEl.addEventListener('change', newGame);
+  sideEl.addEventListener('change', newGame);
+  levelEl.addEventListener('change', updateStatus);
+
+  // Read-only peek at the game, handy for debugging from the console.
+  window.ChickensPigsGame = { get state() { return state; }, get busy() { return busy || computerToMove(); } };
+
+  newGame();
+})();
+</script>
+</body>
+</html>
