@@ -5,6 +5,7 @@ Open `index.html` to see the list of games. Each game lives in `games/<name>/ind
 
 ## Games
 - [Snake](games/snake/index.html): arrow keys or WASD to move, Space or P to pause, swipe on touch screens, T (or the Autoplay button) to let the snake steer itself.
+- [Chickens vs Pigs](games/chickens-vs-pigs/index.html): checkers on the farm. Play a friend on one device or the computer (Easy, Medium, Hard). Tap a piece, then where it goes; jumps are required, and reaching the far row crowns a Rooster or a Boar.
 
 ## Tests
 

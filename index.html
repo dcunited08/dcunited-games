@@ -50,6 +50,7 @@
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .name { font-size: 18px; font-weight: 700; }
   .tag {
+    white-space: nowrap;
     font-size: 12px;
     color: var(--highlight);
     border: 1px solid var(--line);
@@ -106,10 +107,50 @@
         </span>
       </a>
     </li>
+    <li>
+      <a class="game-card" href="games/chickens-vs-pigs/index.html">
+        <span class="preview">
+          <svg viewBox="0 0 120 80" aria-hidden="true">
+            <g fill="#a8794f">
+              <rect x="30" y="10" width="15" height="15"/><rect x="60" y="10" width="15" height="15"/>
+              <rect x="45" y="25" width="15" height="15"/><rect x="75" y="25" width="15" height="15"/>
+              <rect x="30" y="40" width="15" height="15"/><rect x="60" y="40" width="15" height="15"/>
+              <rect x="45" y="55" width="15" height="15"/><rect x="75" y="55" width="15" height="15"/>
+            </g>
+            <g fill="#f6e7bd">
+              <rect x="45" y="10" width="15" height="15"/><rect x="75" y="10" width="15" height="15"/>
+              <rect x="30" y="25" width="15" height="15"/><rect x="60" y="25" width="15" height="15"/>
+              <rect x="45" y="40" width="15" height="15"/><rect x="75" y="40" width="15" height="15"/>
+              <rect x="30" y="55" width="15" height="15"/><rect x="60" y="55" width="15" height="15"/>
+            </g>
+            <g>
+              <circle cx="49" cy="58" r="2.6" fill="#dc2626"/><circle cx="52.5" cy="57" r="2.6" fill="#dc2626"/><circle cx="56" cy="58" r="2.6" fill="#dc2626"/>
+              <circle cx="52.5" cy="62.5" r="6" fill="#ffffff" stroke="#d6d3d1"/>
+              <circle cx="50.5" cy="61.5" r="0.9" fill="#1c1917"/><circle cx="54.5" cy="61.5" r="0.9" fill="#1c1917"/>
+              <path d="M51 63h3l-1.5 2.4z" fill="#f59e0b"/>
+            </g>
+            <g>
+              <path d="M63 13l-3-3 1 6zM72 13l3-3-1 6z" fill="#ec7fa6"/>
+              <circle cx="67.5" cy="17.5" r="6" fill="#f9a8c4"/>
+              <circle cx="65.3" cy="16" r="0.9" fill="#1c1917"/><circle cx="69.7" cy="16" r="0.9" fill="#1c1917"/>
+              <ellipse cx="67.5" cy="19.5" rx="2.6" ry="1.8" fill="#ec7fa6"/>
+            </g>
+          </svg>
+        </span>
+        <span class="body">
+          <span class="row"><span class="name">Chickens vs Pigs</span><span class="tag">Board game</span></span>
+          <span class="desc">Checkers on the farm. Hop the pigs, crown a Rooster.</span>
+          <span class="row">
+            <span class="play">▶ Play</span>
+            <span class="best" data-best-key="dcunited-games.chickens-vs-pigs.wins" hidden>Wins <b></b></span>
+          </span>
+        </span>
+      </a>
+    </li>
   </ul>
 </main>
 <script>
-  // Show each game's saved best score on its card, if there is one.
+  // Show each game's saved best score (or win count) on its card, if there is one.
   document.querySelectorAll('[data-best-key]').forEach((el) => {
     let best = 0;
     try { best = Number(localStorage.getItem(el.dataset.bestKey)) || 0; } catch {}
