@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wars of the Roses</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+  :root {
+    --parchment: #f3e6c4;
+    --parchment-dark: #e3d0a0;
+    --border-gold: #8a6b2c;
+    --york-ink: #7a2d4f;
+    --york-banner: #3b4a8f;
+    --lancaster-ink: #a3182b;
+    --lancaster-banner: #c8102e;
+    --gold: #e0b73c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+  }
+  header, .controls, .banner, .scores, .status, .board-wrap, .result, .help { width: min(100%, 440px); }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h1 { margin: 0; font-size: 24px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .controls label { font-size: 14px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  .controls label[hidden] { display: none; }
+  select, button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--preview); }
+  .primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .primary:hover { background: var(--accent-hover); }
+
+  .banner {
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 8px 12px;
+    border: 2px solid var(--border-gold);
+    border-radius: 8px;
+    background: var(--parchment);
+    color: #3a2a0a;
+  }
+  .scores { display: flex; justify-content: space-between; gap: 12px; }
+  .house {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px 6px 18px 18px;
+    color: #fff;
+    transform-origin: 50% 0;
+  }
+  .house.york { background: var(--york-banner); border-bottom: 4px solid var(--york-ink); }
+  .house.lancaster { background: var(--lancaster-banner); border-bottom: 4px solid var(--gold); }
+  .house svg { width: 30px; height: 30px; flex: none; }
+  .house .name { font-size: 13px; line-height: 1.15; }
+  .house .tally { margin-left: auto; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .house.active { box-shadow: 0 0 0 3px var(--highlight); }
+  .house.winner { animation: wave 0.9s ease-in-out 3; }
+  @keyframes wave { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+
+  .status { text-align: center; min-height: 24px; }
+  #turn { font-weight: 700; font-size: 16px; }
+
+  .board-wrap { position: relative; }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    width: 100%;
+    aspect-ratio: 1;
+    box-sizing: border-box;
+    padding: 8px 8px 18px;
+    background: var(--border-gold);
+    border: 4px double var(--gold);
+    border-radius: 10px 10px 36px 36px;
+  }
+  .cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
+    background: var(--parchment);
+    border: 1px solid var(--parchment-dark);
+    border-radius: 6px;
+    touch-action: manipulation;
+  }
+  .cell:hover { background: #f8eed3; }
+  .cell[aria-disabled="true"] { cursor: default; }
+  .cell:focus-visible { outline: 4px solid var(--accent); outline-offset: -2px; }
+  .cell svg { width: 82%; height: 82%; display: block; }
+  .cell.bloom svg { animation: bloom 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+  .cell.win { background: #fff4c9; }
+  @keyframes bloom { from { transform: scale(0.1) rotate(-60deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+  .slash { position: absolute; inset: 12px 12px 22px; width: calc(100% - 24px); height: calc(100% - 34px); pointer-events: none; }
+  .slash line {
+    stroke: #3a2a0a;
+    stroke-width: 0.12;
+    stroke-linecap: round;
+    stroke-dasharray: 4;
+    stroke-dashoffset: 0;
+    animation: slash 0.45s ease-out;
+  }
+  .slash line.shine { stroke: #f5f5f5; stroke-width: 0.04; }
+  @keyframes slash { from { stroke-dashoffset: 4; } to { stroke-dashoffset: 0; } }
+
+  .result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+  .result[hidden] { display: none; }
+  .result p { margin: 0; font-weight: 600; }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(243, 230, 196, 0.94);
+    border-radius: 10px 10px 40px 40px;
+    text-align: center;
+    padding: 16px;
+    color: #3a2a0a;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 { margin: 0; font-size: 26px; }
+  .overlay p { margin: 0; }
+  .overlay .crown-rose svg { width: 72px; height: 72px; }
+  .help { color: var(--muted); font-size: 13px; margin: 0; text-align: center; }
+
+  @media (max-width: 420px) {
+    .house .name { font-size: 12px; }
+    .house svg { width: 24px; height: 24px; }
+    .overlay h2 { font-size: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cell.bloom svg, .slash line, .house.winner { animation: none; }
+  }
+</style>
+</head>
+<body>
+<nav class="game-nav">
+  <a class="back-link" href="../../index.html">← All games</a>
+</nav>
+<header>
+  <h1>Wars of the Roses</h1>
+  <button id="new-game" class="primary">New campaign</button>
+</header>
+<div class="controls">
+  <label>Play
+    <select id="mode">
+      <option value="ai">vs computer</option>
+      <option value="two">2 players</option>
+    </select>
+  </label>
+  <label id="side-label">as
+    <select id="side">
+      <option value="york">York (white rose)</option>
+      <option value="lancaster">Lancaster (red rose)</option>
+    </select>
+  </label>
+  <label id="level-label">Level
+    <select id="level">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </label>
+  <label>Game
+    <select id="kind">
+      <option value="campaign">Campaign (first to 3)</option>
+      <option value="single">Single battle</option>
+    </select>
+  </label>
+</div>
+<div class="banner" id="banner" aria-live="polite"></div>
+<div class="scores">
+  <div class="house york" id="house-york"><span class="icon" data-rose="york"></span><span class="name">House of York</span><span class="tally" id="score-york">0</span></div>
+  <div class="house lancaster" id="house-lancaster"><span class="icon" data-rose="lancaster"></span><span class="name">House of Lancaster</span><span class="tally" id="score-lancaster">0</span></div>
+</div>
+<div class="status"><span id="turn" aria-live="polite"></span></div>
+<div class="board-wrap">
+  <div class="board" id="board" role="group" aria-label="Battlefield, three by three"></div>
+  <svg class="slash" id="slash" viewBox="0 0 3 3" preserveAspectRatio="none" aria-hidden="true"></svg>
+  <div class="overlay" id="overlay" hidden>
+    <span class="crown-rose" id="crown-rose"></span>
+    <h2 id="overlay-title"></h2>
+    <p id="overlay-text"></p>
+    <button id="again" class="primary">Play again</button>
+  </div>
+</div>
+<div class="result" id="result" hidden>
+  <p id="result-text"></p>
+  <button id="next" class="primary"></button>
+</div>
+<p class="help">Tap a square to plant your rose. Three roses in a row wins the battle. Keyboard: arrow keys move, Enter or Space plants a rose. The loser of a battle moves first in the next.</p>
+
+<script src="logic.js"></script>
+<script src="ai.js"></script>
+<script>
+(() => {
+  const {
+    YORK, LANCASTER, TUDOR, STALEMATE, BATTLES, opponent, createGame, play, isOver, cellLabel,
+    moveCursor, createCampaign, battleName, recordBattle, crownText,
+  } = window.RosesLogic;
+  const { chooseMove } = window.RosesAI;
+  const CROWNS_KEY = 'dcunited-games.wars-of-the-roses.crowns';
+  const AI_DELAY_MS = 400;
+  const HOUSE_NAMES = { [YORK]: 'York', [LANCASTER]: 'Lancaster' };
+
+  const el = (id) => document.getElementById(id);
+  const modeEl = el('mode'), sideEl = el('side'), levelEl = el('level'), kindEl = el('kind');
+  const boardEl = el('board'), slashEl = el('slash'), overlay = el('overlay');
+  const resultEl = el('result'), nextBtn = el('next');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  let campaign, battle, cursor, lastMove, aiTimer, crownTimer, settled, bannerIndex;
+
+  const vsComputer = () => modeEl.value === 'ai';
+  const human = () => sideEl.value;
+  const computerToMove = () => vsComputer() && !isOver(battle) && battle.turn !== human();
+
+  // ---------- roses ----------
+
+  const PALETTES = {
+    [YORK]: { outer: '#fffaf0', inner: '#f3ead2', line: '#b9a574', heart: '#e0b73c' },
+    [LANCASTER]: { outer: '#c8102e', inner: '#9c0b22', line: '#5f0714', heart: '#e0b73c' },
+  };
+
+  // Layered petals, a gold heart and green sepals, all inline SVG.
+  function roseSvg(house, label) {
+    const p = PALETTES[house];
+    const turns = (n, fn) => Array.from({ length: n }, (_, i) => fn(i * (360 / n))).join('');
+    const sepals = turns(5, (a) =>
+      `<path d="M50 50 L44 6 Q50 -2 56 6 Z" transform="rotate(${a + 36} 50 50)" fill="#3f7d3a" stroke="#285425" stroke-width="1.5"/>`);
+    const outer = turns(5, (a) =>
+      `<circle cx="50" cy="26" r="21" transform="rotate(${a} 50 50)" fill="${p.outer}" stroke="${p.line}" stroke-width="2"/>`);
+    const inner = turns(5, (a) =>
+      `<circle cx="50" cy="35" r="14" transform="rotate(${a + 36} 50 50)" fill="${p.inner}" stroke="${p.line}" stroke-width="1.5"/>`);
+    const aria = label ? ` role="img" aria-label="${label}"` : ' aria-hidden="true"';
+    return `<svg viewBox="0 0 100 100"${aria}>${sepals}${outer}${inner}` +
+      `<circle cx="50" cy="50" r="9" fill="${p.heart}" stroke="${p.line}" stroke-width="1.5"/></svg>`;
+  }
+  const tudorSvg = () => '<svg viewBox="0 0 200 100" aria-hidden="true" style="width:120px;height:60px">' +
+    roseSvg(LANCASTER).replace('<svg ', '<svg x="0" width="100" height="100" ') +
+    roseSvg(YORK).replace('<svg ', '<svg x="100" width="100" height="100" ') + '</svg>';
+
+  document.querySelectorAll('[data-rose]').forEach((n) => { n.innerHTML = roseSvg(n.dataset.rose); });
+
+  // ---------- flow ----------
+
+  function newCampaign() {
+    clearTimeout(aiTimer);
+    clearTimeout(crownTimer);
+    campaign = createCampaign({ single: kindEl.value === 'single' });
+    el('side-label').hidden = !vsComputer();
+    el('level-label').hidden = !vsComputer();
+    overlay.hidden = true;
+    startBattle();
+  }
+
+  function startBattle() {
+    clearTimeout(aiTimer);
+    battle = createGame(campaign.firstMover);
+    bannerIndex = Math.min(campaign.battleIndex, BATTLES.length - 1);
+    cursor = 4;
+    lastMove = null;
+    settled = false;
+    resultEl.hidden = true;
+    render();
+    maybeComputerTurn();
+  }
+
+  function maybeComputerTurn() {
+    if (!computerToMove()) return;
+    aiTimer = setTimeout(() => {
+      const move = chooseMove(battle.board, battle.turn, levelEl.value, Math.random);
+      place(move);
+    }, AI_DELAY_MS);
+  }
+
+  function place(index) {
+    const next = play(battle, index);
+    if (next === battle) return;
+    battle = next;
+    lastMove = index;
+    render();
+    if (isOver(battle)) return finishBattle();
+    maybeComputerTurn();
+  }
+
+  function finishBattle() {
+    settled = true;
+    const name = battleName(campaign);
+    campaign = recordBattle(campaign, battle);
+    render();
+    let text;
+    if (battle.winner) {
+      const w = HOUSE_NAMES[battle.winner];
+      text = vsComputer()
+        ? (battle.winner === human() ? `Victory at ${name}! ${w} holds the field.` : `Defeat at ${name}. ${w} holds the field.`)
+        : `${w} wins the battle of ${name}.`;
+    } else {
+      text = `Stalemate on the field at ${name}.`;
+    }
+    if (campaign.over) {
+      el('turn').textContent = text;
+      crownTimer = setTimeout(showCrown, reducedMotion.matches ? 0 : 900);
+      return;
+    }
+    el('result-text').textContent = text;
+    nextBtn.textContent = `Next battle: ${battleName(campaign)}`;
+    resultEl.hidden = false;
+    nextBtn.focus();
+  }
+
+  function showCrown() {
+    el('overlay-title').textContent = crownText(campaign.champion);
+    const { york, lancaster } = campaign.score;
+    el('overlay-text').textContent = campaign.champion === STALEMATE
+      ? 'Neither house prevails.'
+      : campaign.single
+      ? 'The single battle is decided.'
+      : `The campaign ends ${york} to ${lancaster}.`;
+    el('crown-rose').innerHTML = campaign.champion === TUDOR ? tudorSvg()
+      : campaign.champion === STALEMATE ? roseSvg(YORK) + roseSvg(LANCASTER)
+      : roseSvg(campaign.champion);
+    overlay.hidden = false;
+    saveCrown();
+    el('again').focus();
+  }
+
+  function saveCrown() {
+    const champion = campaign.champion;
+    if (campaign.single || champion === TUDOR) return;
+    if (vsComputer() && champion !== human()) return;
+    try {
+      const crowns = (Number(localStorage.getItem(CROWNS_KEY)) || 0) + 1;
+      localStorage.setItem(CROWNS_KEY, String(crowns));
+    } catch {}
+  }
+
+  // ---------- rendering ----------
+
+  function render() {
+    el('score-york').textContent = campaign.score[YORK];
+    el('score-lancaster').textContent = campaign.score[LANCASTER];
+    const inPlay = !isOver(battle);
+    for (const h of [YORK, LANCASTER]) {
+      el(`house-${h}`).classList.toggle('active', inPlay && battle.turn === h);
+      el(`house-${h}`).classList.toggle('winner', battle.winner === h);
+    }
+    el('banner').textContent = campaign.single
+      ? `Single battle: ${BATTLES[bannerIndex]}`
+      : `Battle ${bannerIndex + 1} of ${BATTLES.length}: ${BATTLES[bannerIndex]}`;
+    if (inPlay) {
+      const who = HOUSE_NAMES[battle.turn];
+      el('turn').textContent = computerToMove() ? `${who} is thinking…` : `${who} to play`;
+    } else if (!settled) {
+      el('turn').textContent = '';
+    }
+
+    const hadFocus = boardEl.contains(document.activeElement);
+    boardEl.innerHTML = battle.board.map((house, i) => {
+      const classes = ['cell'];
+      if (i === lastMove) classes.push('bloom');
+      if (battle.line && battle.line.includes(i)) classes.push('win');
+      const full = house !== null || !inPlay || computerToMove();
+      return `<button type="button" class="${classes.join(' ')}" data-i="${i}" ` +
+        `aria-label="${cellLabel(i, house)}" aria-disabled="${full}" tabindex="${i === cursor ? 0 : -1}">` +
+        `${house ? roseSvg(house) : ''}</button>`;
+    }).join('');
+    if (hadFocus) boardEl.querySelectorAll('.cell')[cursor].focus();
+    drawSlash();
+  }
+
+  function drawSlash() {
+    if (!battle.line) { slashEl.innerHTML = ''; return; }
+    const [a, , c] = battle.line;
+    const pt = (i) => [(i % 3) + 0.5, Math.floor(i / 3) + 0.5];
+    const [x1, y1] = pt(a), [x2, y2] = pt(c);
+    // Extend a little past the end cells so the slash cuts clean through them.
+    const dx = (x2 - x1) / 4, dy = (y2 - y1) / 4;
+    const coords = `x1="${x1 - dx}" y1="${y1 - dy}" x2="${x2 + dx}" y2="${y2 + dy}"`;
+    slashEl.innerHTML = `<line ${coords} pathLength="4"/><line class="shine" ${coords} pathLength="4"/>`;
+  }
+
+  // ---------- input ----------
+
+  function choose(index) {
+    if (isOver(battle) || computerToMove()) return;
+    place(index);
+  }
+
+  boardEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cell');
+    if (!btn) return;
+    cursor = Number(btn.dataset.i);
+    choose(cursor);
+  });
+
+  const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  boardEl.addEventListener('keydown', (e) => {
+    const btn = e.target.closest('.cell');
+    if (!btn) return;
+    if (KEYS[e.code]) {
+      cursor = moveCursor(Number(btn.dataset.i), KEYS[e.code]);
+      const cells = boardEl.querySelectorAll('.cell');
+      cells.forEach((c, i) => { c.tabIndex = i === cursor ? 0 : -1; });
+      cells[cursor].focus();
+    } else if (e.code === 'Enter' || e.code === 'Space') {
+      const i = Number(btn.dataset.i);
+      cursor = i;
+      choose(i);
+    } else {
+      return;
+    }
+    e.preventDefault();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    startBattle();
+    boardEl.querySelectorAll('.cell')[cursor].focus();
+  });
+  el('new-game').addEventListener('click', newCampaign);
+  el('again').addEventListener('click', () => { newCampaign(); boardEl.querySelectorAll('.cell')[cursor].focus(); });
+  modeEl.addEventListener('change', newCampaign);
+  sideEl.addEventListener('change', newCampaign);
+  kindEl.addEventListener('change', newCampaign);
+
+  // Read-only peek at the game, handy for debugging from the console.
+  window.RosesGame = { get campaign() { return campaign; }, get battle() { return battle; } };
+
+  newCampaign();
+})();
+</script>
+</body>
+</html>
