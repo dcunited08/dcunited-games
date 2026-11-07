@@ -26,3 +26,10 @@ test('star-battle board leaves room for the buttons and level tabs under it', ()
   const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
   assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
 });
+
+test('logic-grid page fits the visible height: 100dvh body that never scrolls', () => {
+  const html = read('logic-grid', 'index.html');
+  assert.match(html, /height:\s*100dvh/);
+  assert.match(html, /overflow:\s*hidden/);
+  assert.match(html, /overflow:\s*auto/, 'the clue panel scrolls inside itself');
+});
