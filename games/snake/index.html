@@ -19,6 +19,8 @@
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -42,7 +44,7 @@
     color: var(--muted);
   }
   .scores b { color: var(--text); }
-  .board { position: relative; width: min(100%, 480px); }
+  .board { position: relative; width: min(100cqw, 100cqh); }
   canvas {
     display: block;
     width: 100%;
@@ -97,9 +99,46 @@
   @media (hover: hover) and (pointer: fine) {
     .dpad { display: none; }
   }
+
+  /* Fit to screen: board is the largest square that fits its area. */
+  .panel { display: contents; }
+  .board-area {
+    order: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+    width: min(100%, 480px);
+    flex: 0 1 min(calc(100vw - 32px), 480px);
+    min-height: 200px;
+  }
+  .dpad, .help { order: 2; }
+  @media (min-aspect-ratio: 5/4) {
+    body { flex-direction: row; align-items: stretch; justify-content: center; gap: 32px; }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      width: min(440px, 45vw);
+      flex: none;
+      overflow-y: auto;
+    }
+    .panel > * { width: 100%; max-width: none; }
+    .board-area { order: 0; flex: 0 1 calc(100dvh - 32px); height: auto; width: auto; min-width: 0; min-height: 0; }
+  }
+  @media (max-height: 500px) {
+    body { padding: 8px; gap: 8px; }
+    .panel { gap: 8px; }
+    .board-area { flex-basis: calc(100dvh - 16px); }
+  }
+  /* Phones: the how-to-play text gives its room to the board. */
+  @media (max-height: 700px) { .help { display: none; } }
+  @media (min-aspect-ratio: 5/4) { .dpad { align-self: center; width: auto; } }
 </style>
 </head>
 <body>
+<div class="panel">
 <nav class="game-nav">
   <a class="back-link" href="../../index.html">← All games</a>
 </nav>
@@ -111,6 +150,15 @@
   <span>Score <b id="score">0</b></span>
   <span>Best <b id="best">0</b></span>
 </div>
+<div class="dpad" aria-label="Direction controls">
+  <button data-dir="up" aria-label="Up">▲</button>
+  <button data-dir="left" aria-label="Left">◀</button>
+  <button data-dir="down" aria-label="Down">▼</button>
+  <button data-dir="right" aria-label="Right">▶</button>
+</div>
+<p class="help">Arrow keys or WASD to move, Space or P to pause. Swipe on touch screens. T toggles autoplay; steering yourself takes back control.</p>
+</div>
+<div class="board-area">
 <div class="board">
   <canvas id="game" width="480" height="480" aria-label="Snake game board"></canvas>
   <div class="overlay" id="overlay">
@@ -119,13 +167,7 @@
     <button id="start">Play</button>
   </div>
 </div>
-<div class="dpad" aria-label="Direction controls">
-  <button data-dir="up" aria-label="Up">▲</button>
-  <button data-dir="left" aria-label="Left">◀</button>
-  <button data-dir="down" aria-label="Down">▼</button>
-  <button data-dir="right" aria-label="Right">▶</button>
 </div>
-<p class="help">Arrow keys or WASD to move, Space or P to pause. Swipe on touch screens. T toggles autoplay; steering yourself takes back control.</p>
 
 <script src="logic.js"></script>
 <script src="autopilot.js"></script>

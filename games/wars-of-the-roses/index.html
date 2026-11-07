@@ -17,18 +17,21 @@
     --gold: #e0b73c;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
+  html, body { margin: 0; height: 100%; }
   body {
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     padding: 16px;
   }
-  header, .controls, .banner, .scores, .status, .board-wrap, .result, .help { width: min(100%, 440px); }
+  header, .controls, .banner, .scores, .status, .result, .help { width: min(100%, 440px); }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   h1 { margin: 0; font-size: 24px; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -80,7 +83,7 @@
   .status { text-align: center; min-height: 24px; }
   #turn { font-weight: 700; font-size: 16px; }
 
-  .board-wrap { position: relative; }
+  .board-wrap { position: relative; width: min(100cqw, 100cqh); }
   .board {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -169,9 +172,45 @@
   @media (prefers-reduced-motion: reduce) {
     .cell.bloom svg, .stem path.outline, .stem path.core, .stem .thorn, .stem .leaf, .stem .leaf-vein, .house.winner { animation: none; }
   }
+
+  /* Fit to screen: board is the largest square that fits its area. */
+  .panel { display: contents; }
+  .board-area {
+    order: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+    width: min(100%, 440px);
+    flex: 0 1 min(calc(100vw - 32px), 440px);
+    min-height: 200px;
+  }
+  .result, .help { order: 2; }
+  @media (min-aspect-ratio: 5/4) {
+    body { flex-direction: row; align-items: stretch; justify-content: center; gap: 32px; }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      width: min(440px, 45vw);
+      flex: none;
+      overflow-y: auto;
+    }
+    .panel > * { width: 100%; max-width: none; }
+    .board-area { order: 0; flex: 0 1 calc(100dvh - 32px); height: auto; width: auto; min-width: 0; min-height: 0; }
+  }
+  @media (max-height: 500px) {
+    body { padding: 8px; gap: 8px; }
+    .panel { gap: 8px; }
+    .board-area { flex-basis: calc(100dvh - 16px); }
+  }
+  /* Phones: the how-to-play text gives its room to the board. */
+  @media (max-height: 700px) { .help { display: none; } }
 </style>
 </head>
 <body>
+<div class="panel">
 <nav class="game-nav">
   <a class="back-link" href="../../index.html">← All games</a>
 </nav>
@@ -212,6 +251,13 @@
   <div class="house lancaster" id="house-lancaster"><span class="icon" data-rose="lancaster"></span><span class="name">House of Lancaster</span><span class="tally" id="score-lancaster">0</span></div>
 </div>
 <div class="status"><span id="turn" aria-live="polite"></span></div>
+<div class="result" id="result" hidden>
+  <p id="result-text"></p>
+  <button id="next" class="primary"></button>
+</div>
+<p class="help">Tap a square to plant your rose. Three roses in a row wins the battle. Keyboard: arrow keys move, Enter or Space plants a rose. The loser of a battle moves first in the next.</p>
+</div>
+<div class="board-area">
 <div class="board-wrap">
   <div class="board" id="board" role="group" aria-label="Battlefield, three by three"></div>
   <svg class="stem" id="stem" viewBox="0 0 3 3" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -222,11 +268,7 @@
     <button id="again" class="primary">Play again</button>
   </div>
 </div>
-<div class="result" id="result" hidden>
-  <p id="result-text"></p>
-  <button id="next" class="primary"></button>
 </div>
-<p class="help">Tap a square to plant your rose. Three roses in a row wins the battle. Keyboard: arrow keys move, Enter or Space plants a rose. The loser of a battle moves first in the next.</p>
 
 <script src="logic.js"></script>
 <script src="ai.js"></script>
