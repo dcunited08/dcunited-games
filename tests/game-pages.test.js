@@ -34,3 +34,29 @@ for (const name of games) {
     assert.ok(link !== -1 && link < html.indexOf('<h1'));
   });
 }
+
+// Fit-to-screen layout: every playable game (not the logic hub) uses a
+// board-area + panel structure so board and controls fit without scrolling.
+for (const name of games.filter((g) => g !== 'logic')) {
+  const html = fs.readFileSync(path.join(gamesDir, name, 'index.html'), 'utf8');
+
+  test(`${name}: has a board-area and a panel wrapper`, () => {
+    assert.match(html, /<div class="board-area">/);
+    assert.match(html, /<div class="panel">/);
+  });
+
+  test(`${name}: CSS sizes the board from its container and uses dvh`, () => {
+    assert.match(html, /container-type:\s*size/);
+    assert.match(html, /100dvh/);
+  });
+
+  test(`${name}: back link sits inside the panel, before the h1 and the board-area`, () => {
+    const panel = html.indexOf('<div class="panel">');
+    const link = html.indexOf('class="back-link"');
+    const h1 = html.indexOf('<h1');
+    const area = html.indexOf('<div class="board-area">');
+    assert.ok(panel !== -1 && panel < link);
+    assert.ok(link < h1);
+    assert.ok(link < area);
+  });
+}

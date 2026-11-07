@@ -14,18 +14,21 @@
     --pig: #f9a8c4;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
+  html, body { margin: 0; height: 100%; }
   body {
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     padding: 16px;
   }
-  header, .controls, .status, .board { width: min(100%, 520px); }
+  header, .controls, .status { width: min(100%, 520px); }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   h1 { margin: 0; font-size: 24px; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -54,7 +57,7 @@
   }
   #turn { color: var(--text); font-weight: 700; font-size: 16px; }
   .pen b { color: var(--text); }
-  .board { position: relative; }
+  .board { position: relative; width: min(100cqw, 100cqh); }
   canvas {
     display: block;
     width: 100%;
@@ -81,9 +84,45 @@
   .overlay h2 { margin: 0; font-size: 28px; }
   .overlay p { margin: 0; color: var(--muted); }
   .help { color: var(--muted); font-size: 13px; margin: 0; text-align: center; max-width: 520px; }
+
+  /* Fit to screen: board is the largest square that fits its area. */
+  .panel { display: contents; }
+  .board-area {
+    order: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+    width: min(100%, 520px);
+    flex: 0 1 min(calc(100vw - 32px), 520px);
+    min-height: 200px;
+  }
+  .help { order: 2; }
+  @media (min-aspect-ratio: 5/4) {
+    body { flex-direction: row; align-items: stretch; justify-content: center; gap: 32px; }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+      width: min(440px, 45vw);
+      flex: none;
+      overflow-y: auto;
+    }
+    .panel > * { width: 100%; max-width: none; }
+    .board-area { order: 0; flex: 0 1 calc(100dvh - 32px); height: auto; width: auto; min-width: 0; min-height: 0; }
+  }
+  @media (max-height: 500px) {
+    body { padding: 8px; gap: 8px; }
+    .panel { gap: 8px; }
+    .board-area { flex-basis: calc(100dvh - 16px); }
+  }
+  /* Phones: the how-to-play text gives its room to the board. */
+  @media (max-height: 700px) { .help { display: none; } }
 </style>
 </head>
 <body>
+<div class="panel">
 <nav class="game-nav">
   <a class="back-link" href="../../index.html">← All games</a>
 </nav>
@@ -117,6 +156,9 @@
   <span id="turn" aria-live="polite">Chickens' turn</span>
   <span class="pen" title="Chickens the pigs have captured">🐷 pen: <b id="pig-pen">0</b> 🐔</span>
 </div>
+<p class="help">Tap a piece, then tap where it should go. Jumps are required: pieces that must jump are ringed in gold. Reach the far row to become a Rooster or a Boar, who can move backwards. Keyboard: arrow keys move the cursor, Enter or Space picks and drops, Esc cancels.</p>
+</div>
+<div class="board-area">
 <div class="board">
   <canvas id="game" width="640" height="640" tabindex="0" aria-label="Checkers board"></canvas>
   <div class="overlay" id="overlay" hidden>
@@ -125,7 +167,7 @@
     <button id="again" class="primary">Play again</button>
   </div>
 </div>
-<p class="help">Tap a piece, then tap where it should go. Jumps are required: pieces that must jump are ringed in gold. Reach the far row to become a Rooster or a Boar, who can move backwards. Keyboard: arrow keys move the cursor, Enter or Space picks and drops, Esc cancels.</p>
+</div>
 
 <script src="logic.js"></script>
 <script src="ai.js"></script>
