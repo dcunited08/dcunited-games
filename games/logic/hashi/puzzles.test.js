@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const L = require('./logic.js');
 const S = require('./solver.js');
 const puzzles = require('./puzzles.js');
+const G = require('./generator.js');
 
 const SIZES = { easy: 7, medium: 9, hard: 11 };
 const COUNTS = { easy: 17, medium: 17, hard: 16 };
@@ -40,4 +41,16 @@ test('no puzzle appears twice', () => {
 
 test('hard puzzles need more than plain deduction', () => {
   assert.ok(puzzles.hard.every((p) => !S.analyze(p).solved));
+});
+
+test('easy and medium puzzles can be solved by deduction alone, with no guessing', () => {
+  for (const level of ['easy', 'medium']) {
+    puzzles[level].forEach((p, i) => assert.ok(S.analyze(p).solved, `${level}-${i + 1} needs a guess`));
+  }
+});
+
+test('every puzzle spreads its islands over all four quarters of the board', () => {
+  for (const rows of Object.values(puzzles).flat()) {
+    assert.ok(G.isSpread(rows), rows.join('/'));
+  }
 });

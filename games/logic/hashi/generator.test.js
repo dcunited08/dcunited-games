@@ -63,3 +63,15 @@ test('puzzlesSource writes a script that evaluates back to the set', () => {
   new Function(src).call(root);
   assert.deepEqual(root.HashiPuzzles, set);
 });
+
+test('isSpread needs an island in each quarter of the board', () => {
+  assert.equal(G.isSpread(['1...1', '.....', '.....', '.....', '1...1']), true);
+  assert.equal(G.isSpread(['1...1', '.....', '.....', '.....', '1....']), false);
+  assert.equal(G.isSpread(['11...', '11...', '.....', '.....', '.....']), false);
+});
+
+test('fitsLevel: easy and medium need no guessing, hard needs more than plain deduction, all spread', () => {
+  assert.equal(G.fitsLevel('easy', ['2.2', '...', '2.2']), false);
+  assert.equal(G.fitsLevel('hard', ['2.2', '...', '2.2']), true);
+  assert.equal(G.fitsLevel('medium', ['1...', '....', '....', '...1']), false);
+});

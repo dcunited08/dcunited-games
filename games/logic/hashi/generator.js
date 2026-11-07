@@ -102,6 +102,25 @@
   // Hard puzzles need more than plain deduction: some guessing or connectivity reasoning.
   const isHardEnough = (rows) => !Solver.analyze(rows).solved;
 
+  // True when every quarter of the board has an island (the middle row and
+  // column count for both sides), so a board never looks half empty.
+  function isSpread(rows) {
+    const midR = (rows.length - 1) / 2, midC = (rows[0].length - 1) / 2;
+    const seen = new Set();
+    rows.forEach((row, r) => [...row].forEach((ch, c) => {
+      if (ch === '.') return;
+      for (const v of r <= midR ? (r >= midR ? 'tb' : 't') : 'b') {
+        for (const h of c <= midC ? (c >= midC ? 'lr' : 'l') : 'r') seen.add(v + h);
+      }
+    }));
+    return seen.size === 4;
+  }
+
+  // Easy and medium must be solvable without guessing; hard must need more
+  // than plain deduction. Every level must be spread over the board.
+  const fitsLevel = (level, rows) =>
+    isSpread(rows) && (level === 'hard' ? isHardEnough(rows) : Solver.analyze(rows).solved);
+
   const LEVELS = [
     ['easy', { size: 7, minIslands: 8, maxIslands: 12 }],
     ['medium', { size: 9, minIslands: 14, maxIslands: 20 }],
@@ -120,7 +139,7 @@
         if (i > 20000) throw new Error(`Could not find enough ${level} puzzles`);
         const rows = generate(spec, createRng(baseSeed * 1000003 + index * 100003 + i));
         const key = rows.join('/');
-        if (seen.has(key) || (level === 'hard' && !isHardEnough(rows))) continue;
+        if (seen.has(key) || !fitsLevel(level, rows)) continue;
         seen.add(key);
         set[level].push(rows);
       }
@@ -147,7 +166,7 @@ ${lines.join('\n')}
 `;
   }
 
-  const api = { createRng, randomInt, shuffled, generate, isHardEnough, buildPuzzleSet, puzzlesSource, LEVELS };
+  const api = { createRng, randomInt, shuffled, generate, isHardEnough, isSpread, fitsLevel, buildPuzzleSet, puzzlesSource, LEVELS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.HashiGenerator = api;
 })(this);
