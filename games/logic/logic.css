@@ -48,6 +48,7 @@ h1 { margin: 0; font-size: 28px; }
 
 .puzzle-board {
   --size: min(100%, 720px, calc(100vh - 360px));
+  --size: min(100%, 720px, calc(100dvh - 360px));
   width: var(--size);
   min-width: 240px;
   aspect-ratio: 1;
