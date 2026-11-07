@@ -16,8 +16,8 @@
 
   /* Board: as large as fits. */
   .puzzle-board {
-    --size: min(calc(100vw - 32px), 720px, calc(100vh - 330px));
-    --size: min(calc(100vw - 32px), 720px, calc(100dvh - 330px));
+    --size: min(calc(100vw - 32px), 720px, calc(100vh - 470px));
+    --size: min(calc(100vw - 32px), 720px, calc(100dvh - 470px));
     width: var(--size);
     min-width: 0;
     grid-template-columns: repeat(9, 1fr);
@@ -121,7 +121,7 @@
     body { padding-top: 8px; gap: 8px; }
     h1 { font-size: 22px; }
     .play-area { flex-direction: row; justify-content: center; align-items: flex-start; gap: 20px; }
-    .puzzle-board { --size: min(calc(100vw - 400px), 720px, calc(100vh - 130px)); --size: min(calc(100vw - 400px), 720px, calc(100dvh - 130px)); flex: none; }
+    .puzzle-board { --size: min(calc(100vw - 400px), 720px, calc(100vh - 150px)); --size: min(calc(100vw - 400px), 720px, calc(100dvh - 150px)); flex: none; }
     .side { width: 340px; flex: none; }
     .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); }
     .toolbar .tool { min-height: 56px; }
@@ -159,29 +159,29 @@
         <button class="tool" id="restart" type="button">Restart</button>
       </div>
       <div class="numpad" id="pad"></div>
+      <div class="win" id="win" hidden>
+        <span id="winText">Solved!</span>
+        <button class="tool" id="next" type="button">Next puzzle</button>
+      </div>
+
+      <details id="pickerBox">
+        <summary id="pickerSummary">Choose a puzzle</summary>
+        <div id="picker"></div>
+      </details>
+
+      <details>
+        <summary>How to play</summary>
+        <ul>
+          <li>Fill the grid so every row, column and 3x3 box has 1 to 9 once.</li>
+          <li>The dashed shapes are cages. The small number in a cage's corner is the total of its digits, and a cage never repeats a digit.</li>
+          <li>Tap a square, then tap a number. Tap the same number again to clear it.</li>
+          <li>Turn on Notes to jot small pencil marks. Placing a number clears it from the notes in its row, column, box and cage.</li>
+          <li>Red numbers break a rule. Check shows squares that differ from the answer. Hint fills in one square for you.</li>
+        </ul>
+      </details>
     </div>
   </div>
 
-  <div class="win" id="win" hidden>
-    <span id="winText">Solved!</span>
-    <button class="tool" id="next" type="button">Next puzzle</button>
-  </div>
-
-  <details id="pickerBox">
-    <summary id="pickerSummary">Choose a puzzle</summary>
-    <div id="picker"></div>
-  </details>
-
-  <details>
-    <summary>How to play</summary>
-    <ul>
-      <li>Fill the grid so every row, column and 3x3 box has 1 to 9 once.</li>
-      <li>The dashed shapes are cages. The small number in a cage's corner is the total of its digits, and a cage never repeats a digit.</li>
-      <li>Tap a square, then tap a number. Tap the same number again to clear it.</li>
-      <li>Turn on Notes to jot small pencil marks. Placing a number clears it from the notes in its row, column, box and cage.</li>
-      <li>Red numbers break a rule. Check shows squares that differ from the answer. Hint fills in one square for you.</li>
-    </ul>
-  </details>
 </div>
 
 <script src="../kit.js"></script>
