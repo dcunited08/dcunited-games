@@ -132,3 +132,20 @@ test('hintCell is null when solved and a hint applies cleanly', () => {
   assert.equal(L.isSolved(s), true);
   assert.equal(L.hintCell(s), null);
 });
+
+test('dragPaint only changes cells that started like the first cell', () => {
+  let s = L.createGame(heart);
+  s = L.applyTool(s, cellsOf([1, 1]), 'cross');
+  s = L.applyTool(s, cellsOf([1, 3]), 'fill');
+  const line = L.lineCells({ r: 1, c: 0 }, { r: 1, c: 4 });
+  // Filling from an empty cell keeps the X and the existing fill.
+  const filled = L.dragPaint(s, line, 'fill');
+  assert.deepEqual(filled.cells[1], ['filled', 'cross', 'filled', 'filled', 'filled']);
+  // Clearing from a filled cell leaves the X alone.
+  const cleared = L.dragPaint(filled, line, 'clear');
+  assert.deepEqual(cleared.cells[1], ['empty', 'cross', 'empty', 'empty', 'empty']);
+  // The first cell always takes the action, even if it held something else.
+  const over = L.dragPaint(s, cellsOf([1, 1], [1, 2]), 'fill');
+  assert.deepEqual(over.cells[1].slice(0, 3), ['empty', 'filled', 'empty']);
+  assert.equal(L.dragPaint(s, [], 'fill'), s);
+});

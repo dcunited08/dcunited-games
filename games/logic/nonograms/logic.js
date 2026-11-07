@@ -50,6 +50,15 @@
     return { ...state, cells: next };
   }
 
+  // Paint a drag: the first cell always takes the action; the rest change only if
+  // they held the same value as the first cell, so a swipe never wipes other marks.
+  function dragPaint(state, cells, tool) {
+    if (cells.length === 0) return state;
+    const first = state.cells[cells[0].r][cells[0].c];
+    const same = cells.filter(({ r, c }, i) => i === 0 || state.cells[r][c] === first);
+    return applyTool(state, same, tool);
+  }
+
   // What a drag that starts on a cell holding `current` paints.
   function dragAction(current, tool) {
     const same = (tool === 'fill' && current === FILLED) || (tool === 'cross' && current === CROSS);
@@ -128,7 +137,7 @@
   }
 
   const api = {
-    cluesFor, createGame, applyTool, dragAction, lineCells,
+    cluesFor, createGame, applyTool, dragPaint, dragAction, lineCells,
     rowComplete, colComplete, isSolved, wrongCells, hintCell, serialize, deserialize,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

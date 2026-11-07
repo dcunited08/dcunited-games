@@ -324,7 +324,7 @@
     const action = Logic.dragAction(state.cells[rc.r][rc.c], tool);
     drag = { start: rc, action, base: state };
     setHover(rc);
-    commit(Logic.applyTool(drag.base, Logic.lineCells(rc, rc), action));
+    commit(Logic.dragPaint(drag.base, Logic.lineCells(rc, rc), action));
   });
 
   board.addEventListener('pointermove', (e) => {
@@ -332,7 +332,7 @@
     if (!drag) { if (e.pointerType === 'mouse') setHover(rc); return; }
     if (!rc) return;
     setHover(rc);
-    commit(Logic.applyTool(drag.base, Logic.lineCells(drag.start, rc), drag.action));
+    commit(Logic.dragPaint(drag.base, Logic.lineCells(drag.start, rc), drag.action));
   });
 
   function endDrag(cancel) {
