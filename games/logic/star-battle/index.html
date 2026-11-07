@@ -14,10 +14,12 @@
     --thick: #0f2340;
     --thin: rgba(15, 35, 64, 0.22);
   }
-  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 16px; line-height: 1.4; }
+  body { gap: 8px; }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.35; }
   .rules b { color: var(--text); }
   .puzzle-board {
-    --size: min(100%, 720px, calc(100vh - 330px));
+    --size: min(100%, 720px, calc(100vh - 480px));
+    --size: min(100%, 720px, calc(100dvh - 480px));
     min-width: min(100%, 300px);
     gap: 0;
     background: var(--panel);
@@ -58,7 +60,9 @@
   .puzzle-board.locked .cell { cursor: default; }
   .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .info b { color: var(--text); }
-  .message { min-height: 2.8em; }
+  .message { min-height: 1.5em; }
+  .picker { gap: 8px; }
+  .puzzle-list { gap: 6px; }
   .solved-panel {
     width: min(100%, 720px); text-align: center; padding: 16px; border-radius: 14px;
     background: var(--panel); border: 2px solid var(--accent);
@@ -80,6 +84,16 @@
   .picker-wrap { width: min(100%, 720px); }
   @media (prefers-reduced-motion: reduce) {
     .cell.hinted, .solved-panel .stars span, .cell.star.win .mark { animation: none; }
+  }
+  /* Wide and short (iPad landscape): board on the left, everything else in a column on the right. */
+  @media (min-aspect-ratio: 11/10) and (max-height: 900px) {
+    body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); grid-auto-rows: min-content; align-content: start; column-gap: 20px; row-gap: 8px; align-items: start; }
+    body > * { grid-column: 2; width: 100%; }
+    body > .board-wrap { grid-column: 1; grid-row: 1 / span 9; width: 100%; align-self: start; }
+    .puzzle-board { --size: min(calc(100vw - 460px), 720px, calc(100vh - 40px)); --size: min(calc(100vw - 460px), 720px, calc(100dvh - 40px)); }
+    h1 { font-size: 24px; text-align: left; }
+    .rules { text-align: left; }
+    .crumbs { width: 100%; }
   }
 </style>
 </head>
