@@ -29,6 +29,16 @@ test('star-battle board leaves room for the buttons and level tabs under it', ()
 
 test('tents board leaves room for the buttons and level tabs under it', () => {
   const rules = sizeRules(read('tents', 'index.html'));
+  assert.ok(rules.length > 0);
+  const portrait = rules.filter((r) => r.includes('100dvh'))[0];
+  assert.ok(portrait, 'uses dvh');
+  const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
+});
+
+test('binairo board leaves room for the buttons and level tabs under it', () => {
+  const rules = sizeRules(read('binairo', 'index.html'));
+  assert.ok(rules.length > 0);
   const portrait = rules.filter((r) => r.includes('100dvh'))[0];
   assert.ok(portrait, 'uses dvh');
   const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
