@@ -33,3 +33,12 @@ test('logic-grid page fits the visible height: 100dvh body that never scrolls', 
   assert.match(html, /overflow:\s*hidden/);
   assert.match(html, /overflow:\s*auto/, 'the clue panel scrolls inside itself');
 });
+
+test('binairo board leaves room for the buttons and level tabs under it', () => {
+  const rules = sizeRules(read('binairo', 'index.html'));
+  assert.ok(rules.length > 0);
+  const portrait = rules.filter((r) => r.includes('100dvh'))[0];
+  assert.ok(portrait, 'uses dvh');
+  const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
+});
