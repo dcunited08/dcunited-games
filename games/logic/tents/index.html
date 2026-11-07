@@ -27,6 +27,7 @@
     width: var(--size);
     min-width: min(100%, 300px);
     aspect-ratio: 1;
+    container-type: inline-size;
     display: grid;
     grid-template-columns: var(--unit) 1fr;
     grid-template-rows: var(--unit) 1fr;
@@ -35,7 +36,7 @@
   .row-clues { grid-column: 1; grid-row: 2; display: grid; grid-template-rows: repeat(var(--n), 1fr); }
   .clue {
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: clamp(14px, calc(var(--unit) * 0.5), 28px); line-height: 1;
+    font-weight: 700; font-size: clamp(14px, calc(50cqw / (var(--n) + 1)), 28px); line-height: 1;
     color: var(--muted); font-variant-numeric: tabular-nums;
   }
   .clue.met { color: var(--met); }
