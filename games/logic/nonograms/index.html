@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nonograms</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  main { width: min(100%, 720px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  details.chooser { width: 100%; }
+  details.chooser summary {
+    list-style: none; cursor: pointer; min-height: 48px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-weight: 600;
+  }
+  details.chooser summary::-webkit-details-marker { display: none; }
+  details.chooser[open] summary { margin-bottom: 12px; }
+  .puzzle-btn.solved { color: var(--text); }
+
+  .ng-wrap { width: 100%; display: flex; justify-content: center; }
+  .ng {
+    --cell: min(44px, calc((min(100vw, 720px) - 40px) / (var(--n) + var(--kr) * 0.55)));
+    --clue: max(9px, calc(var(--cell) * 0.5));
+    display: grid;
+    grid-template-columns: calc(var(--kr) * var(--cell) * 0.55) repeat(var(--n), var(--cell));
+    grid-template-rows: calc(var(--kc) * var(--clue) * 1.25) repeat(var(--n), var(--cell));
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .corner { grid-row: 1; grid-column: 1; }
+  .clue { display: flex; font-size: var(--clue); line-height: 1.25; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; border-radius: 4px; }
+  .clue.col { flex-direction: column; justify-content: flex-end; align-items: center; }
+  .clue.row { flex-direction: row; justify-content: flex-end; align-items: center; gap: 0.35em; padding-right: 0.4em; }
+  .clue.done { color: var(--muted); opacity: 0.4; font-weight: 500; }
+  .clue.hl { background: var(--cell-selected); }
+  .ng .cell {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: none;
+    transition: background 0.12s;
+  }
+  .ng .cell.c5 { border-right: 2px solid var(--muted); }
+  .ng .cell.r5 { border-bottom: 2px solid var(--muted); }
+  .ng .cell.first-c { border-left: 2px solid var(--muted); }
+  .ng .cell.first-r { border-top: 2px solid var(--muted); }
+  .ng .cell.hl { background: var(--cell-selected); }
+  .ng .cell.filled { background: var(--accent); }
+  .ng .cell.cross::after {
+    content: "\00d7"; color: var(--muted); font-size: calc(var(--cell) * 0.75); line-height: 1;
+    transition: opacity 0.6s;
+  }
+  .ng .cell.wrong { background: var(--cell-error); }
+  .ng .cell.filled.wrong { background: var(--error-text); }
+  .ng.solved .cell.cross::after { opacity: 0; }
+  .ng.solved .cell.filled { transition: background 0.4s; }
+
+  .toolbar .tool { flex: 1 1 96px; max-width: 150px; }
+  .result { width: 100%; text-align: center; font-size: 22px; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .result[hidden] { display: none; }
+  .result .tool { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Nonograms</h1>
+<main>
+  <details class="chooser" id="chooser" open>
+    <summary id="chooser-summary">Choose a puzzle</summary>
+    <div id="picker"></div>
+  </details>
+  <div class="status" id="status" aria-live="polite"></div>
+  <div class="ng-wrap"><div class="ng" id="board" role="grid" aria-label="Nonogram board"></div></div>
+  <div class="toolbar" role="group" aria-label="Tools">
+    <button type="button" class="tool" id="tool-fill" aria-pressed="true">&#9632; Fill</button>
+    <button type="button" class="tool" id="tool-cross" aria-pressed="false">&#10005; Mark X</button>
+  </div>
+  <div class="toolbar">
+    <button type="button" class="tool" id="undo">Undo</button>
+    <button type="button" class="tool" id="restart">Restart</button>
+    <button type="button" class="tool" id="check">Check</button>
+    <button type="button" class="tool" id="hint">Hint</button>
+  </div>
+  <div class="result" id="result" hidden>
+    <div id="result-text"></div>
+    <button type="button" class="tool" id="next">Next puzzle</button>
+  </div>
+</main>
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="puzzles.js"></script>
+<script src="logic.js"></script>
+<script>
+(function () {
+  const Puzzles = window.NonogramPuzzles;
+  const Logic = window.NonogramLogic;
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Shared kit, with a minimal fallback so the page never crashes without it ----
+  const kit = window.LogicKit || (function () {
+    const fmt = (ms) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    const memory = {};
+    const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return memory[k] || null; } };
+    const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { memory[k] = v; } };
+    const P = 'dcunited-games.logic.nonograms.';
+    const ids = () => { try { const a = JSON.parse(get(P + 'solved-ids')); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+    return {
+      formatTime: fmt,
+      createHistory() {
+        const st = [];
+        return { push: (s) => st.push(JSON.parse(JSON.stringify(s))), undo: () => st.pop(), canUndo: () => st.length > 0, clear: () => { st.length = 0; } };
+      },
+      createProgress() {
+        return {
+          isSolved: (id) => ids().includes(id),
+          markSolved(id) { const a = ids(); if (!a.includes(id)) { a.push(id); set(P + 'solved-ids', JSON.stringify(a)); set(P + 'solved', String(a.length)); } return a.length; },
+          loadSave: (id) => { try { return JSON.parse(get(P + 'save.' + id)); } catch (e) { return null; } },
+          save: (id, o) => set(P + 'save.' + id, JSON.stringify(o)),
+          clearSave: (id) => { try { localStorage.removeItem(P + 'save.' + id); } catch (e) { /* ignore */ } },
+          lastPlayed: () => get(P + 'last'),
+          setLastPlayed: (id) => set(P + 'last', String(id)),
+        };
+      },
+    };
+  })();
+  const progress = kit.createProgress('nonograms');
+  const history = kit.createHistory();
+
+  const counts = { easy: 0, medium: 0, hard: 0 };
+  Puzzles.forEach((p) => { counts[p.level]++; });
+  const byId = {};
+  Puzzles.forEach((p) => { byId[p.id] = p; });
+  const order = Puzzles.map((p) => p.id);
+
+  function renderPicker(current) {
+    const opts = { counts, isSolved: progress.isSolved, current, onPick: (id) => { $('chooser').open = false; load(id); } };
+    if (window.LogicPicker) { window.LogicPicker.render($('picker'), opts); return; }
+    const box = $('picker');
+    box.replaceChildren();
+    Puzzles.forEach((p, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'puzzle-btn' + (progress.isSolved(p.id) ? ' solved' : '');
+      b.textContent = (i + 1) + (progress.isSolved(p.id) ? ' ✓' : '');
+      b.addEventListener('click', () => opts.onPick(p.id));
+      box.append(b);
+    });
+  }
+
+  // ---- Game state ----
+  let puzzle, state, tool = 'fill', solved = false;
+  let elapsed = 0, lastTick = 0, timer = null;
+  let cellEls = [], rowClueEls = [], colClueEls = [];
+  let drag = null;
+
+  const board = $('board');
+  const status = $('status');
+
+  function buildBoard() {
+    const n = state.w;
+    board.replaceChildren();
+    const kr = Math.max(1, ...state.clues.rows.map((c) => Math.max(1, c.length)));
+    const kc = Math.max(1, ...state.clues.cols.map((c) => Math.max(1, c.length)));
+    board.style.setProperty('--n', n);
+    board.style.setProperty('--kr', kr);
+    board.style.setProperty('--kc', kc);
+    board.classList.remove('solved');
+    const corner = document.createElement('div');
+    corner.className = 'corner';
+    board.append(corner);
+    colClueEls = state.clues.cols.map((clue, c) => {
+      const d = document.createElement('div');
+      d.className = 'clue col';
+      d.style.gridColumn = c + 2;
+      d.style.gridRow = 1;
+      d.append(...(clue.length ? clue : [0]).map((v) => { const s = document.createElement('span'); s.textContent = v; return s; }));
+      board.append(d);
+      return d;
+    });
+    cellEls = [];
+    rowClueEls = [];
+    for (let r = 0; r < state.h; r++) {
+      const clue = state.clues.rows[r];
+      const d = document.createElement('div');
+      d.className = 'clue row';
+      d.style.gridColumn = 1;
+      d.style.gridRow = r + 2;
+      d.append(...(clue.length ? clue : [0]).map((v) => { const s = document.createElement('span'); s.textContent = v; return s; }));
+      board.append(d);
+      rowClueEls.push(d);
+      const rowEls = [];
+      for (let c = 0; c < n; c++) {
+        const e = document.createElement('div');
+        e.className = 'cell' + ((c + 1) % 5 === 0 && c < n - 1 ? ' c5' : '') + ((r + 1) % 5 === 0 && r < n - 1 ? ' r5' : '')
+          + (c === 0 ? ' first-c' : '') + (r === 0 ? ' first-r' : '');
+        e.dataset.r = r;
+        e.dataset.c = c;
+        e.style.gridColumn = c + 2;
+        e.style.gridRow = r + 2;
+        board.append(e);
+        rowEls.push(e);
+      }
+      cellEls.push(rowEls);
+    }
+  }
+
+  function paint() {
+    for (let r = 0; r < state.h; r++) {
+      for (let c = 0; c < state.w; c++) {
+        const v = state.cells[r][c];
+        const e = cellEls[r][c];
+        e.classList.toggle('filled', v === 'filled');
+        e.classList.toggle('cross', v === 'cross');
+      }
+      rowClueEls[r].classList.toggle('done', Logic.rowComplete(state, r));
+    }
+    for (let c = 0; c < state.w; c++) colClueEls[c].classList.toggle('done', Logic.colComplete(state, c));
+    $('undo').disabled = !history.canUndo();
+  }
+
+  let hover = null;
+  function setHover(rc) {
+    if (hover) {
+      for (let i = 0; i < state.w; i++) cellEls[hover.r][i].classList.remove('hl');
+      for (let i = 0; i < state.h; i++) cellEls[i][hover.c].classList.remove('hl');
+      rowClueEls[hover.r].classList.remove('hl');
+      colClueEls[hover.c].classList.remove('hl');
+    }
+    hover = rc;
+    if (rc) {
+      for (let i = 0; i < state.w; i++) cellEls[rc.r][i].classList.add('hl');
+      for (let i = 0; i < state.h; i++) cellEls[i][rc.c].classList.add('hl');
+      rowClueEls[rc.r].classList.add('hl');
+      colClueEls[rc.c].classList.add('hl');
+    }
+  }
+
+  function cellAt(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const cell = el && el.closest ? el.closest('.cell') : null;
+    return cell && board.contains(cell) ? { r: Number(cell.dataset.r), c: Number(cell.dataset.c) } : null;
+  }
+
+  // ---- Persistence and timer ----
+  function persist() {
+    if (solved) return;
+    progress.save(puzzle.id, { g: Logic.serialize(state), t: Math.round(elapsed) });
+  }
+  function tick() {
+    const now = Date.now();
+    if (!document.hidden && !solved) elapsed += Math.min(now - lastTick, 2000);
+    lastTick = now;
+    if (!solved) showStatus();
+  }
+  function showStatus() {
+    const level = puzzle.level[0].toUpperCase() + puzzle.level.slice(1);
+    status.innerHTML = '';
+    const b = document.createElement('b');
+    b.textContent = level + ' ' + puzzle.id.split('-')[1];
+    status.append(b, ' · ' + kit.formatTime(elapsed));
+  }
+
+  function load(id) {
+    if (!byId[id]) id = 'easy-1';
+    puzzle = byId[id];
+    solved = false;
+    state = Logic.createGame(puzzle);
+    elapsed = 0;
+    const saved = progress.loadSave(id);
+    if (saved && typeof saved === 'object') {
+      const restored = Logic.deserialize(puzzle, saved.g);
+      if (restored) {
+        state = restored;
+        elapsed = Number(saved.t) > 0 ? Number(saved.t) : 0;
+      }
+    }
+    history.clear();
+    progress.setLastPlayed(id);
+    hover = null;
+    $('result').hidden = true;
+    buildBoard();
+    paint();
+    renderPicker(id);
+    lastTick = Date.now();
+    showStatus();
+    $('chooser-summary').textContent = 'Choose a puzzle';
+    if (Logic.isSolved(state)) finish(false);
+  }
+
+  function finish(record) {
+    solved = true;
+    board.classList.add('solved');
+    // Fade the crosses by clearing them from the model too.
+    state = { ...state, cells: state.cells.map((row) => row.map((v) => (v === 'cross' ? 'empty' : v))) };
+    if (record) {
+      progress.markSolved(puzzle.id);
+      progress.clearSave(puzzle.id);
+    }
+    renderPicker(puzzle.id);
+    $('result-text').textContent = 'Solved! It’s a ' + puzzle.name;
+    status.textContent = 'Time ' + kit.formatTime(elapsed);
+    $('result').hidden = false;
+    setTimeout(paint, 700);
+    $('undo').disabled = true;
+  }
+
+  // ---- Input ----
+  function commit(next) {
+    state = next;
+    paint();
+  }
+
+  board.addEventListener('pointerdown', (e) => {
+    if (solved || e.button > 0) return;
+    const rc = cellAt(e.clientX, e.clientY);
+    if (!rc) return;
+    e.preventDefault();
+    const action = Logic.dragAction(state.cells[rc.r][rc.c], tool);
+    drag = { start: rc, action, base: state };
+    setHover(rc);
+    commit(Logic.dragPaint(drag.base, Logic.lineCells(rc, rc), action));
+  });
+
+  board.addEventListener('pointermove', (e) => {
+    const rc = cellAt(e.clientX, e.clientY);
+    if (!drag) { if (e.pointerType === 'mouse') setHover(rc); return; }
+    if (!rc) return;
+    setHover(rc);
+    commit(Logic.dragPaint(drag.base, Logic.lineCells(drag.start, rc), drag.action));
+  });
+
+  function endDrag(cancel) {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (cancel) { commit(d.base); setHover(null); return; }
+    if (Logic.serialize(state) !== Logic.serialize(d.base)) {
+      history.push(d.base.cells);
+      persist();
+      paint();
+      if (Logic.isSolved(state)) finish(true);
+    }
+    setHover(null);
+  }
+  window.addEventListener('pointerup', () => endDrag(false));
+  window.addEventListener('pointercancel', () => endDrag(true));
+  board.addEventListener('pointerleave', (e) => { if (!drag && e.pointerType === 'mouse') setHover(null); });
+  board.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  function setTool(t) {
+    tool = t;
+    $('tool-fill').setAttribute('aria-pressed', String(t === 'fill'));
+    $('tool-cross').setAttribute('aria-pressed', String(t === 'cross'));
+  }
+  $('tool-fill').addEventListener('click', () => setTool('fill'));
+  $('tool-cross').addEventListener('click', () => setTool('cross'));
+
+  $('undo').addEventListener('click', () => {
+    if (solved) return;
+    const cells = history.undo();
+    if (cells) { state = { ...state, cells }; persist(); paint(); }
+  });
+  $('restart').addEventListener('click', () => {
+    if (solved) {
+      progress.clearSave(puzzle.id);
+      load(puzzle.id);
+      return;
+    }
+    if (Logic.serialize(state) === Logic.serialize(Logic.createGame(puzzle))) return;
+    history.push(state.cells);
+    commit(Logic.createGame(puzzle));
+    persist();
+  });
+  $('check').addEventListener('click', () => {
+    if (solved) return;
+    const wrong = Logic.wrongCells(state);
+    wrong.forEach(({ r, c }) => cellEls[r][c].classList.add('wrong'));
+    status.textContent = wrong.length ? wrong.length + ' square' + (wrong.length === 1 ? ' is' : 's are') + ' wrong' : 'All good so far!';
+    setTimeout(() => {
+      wrong.forEach(({ r, c }) => cellEls[r][c].classList.remove('wrong'));
+      showStatus();
+    }, 1800);
+  });
+  $('hint').addEventListener('click', () => {
+    if (solved) return;
+    const h = Logic.hintCell(state, Math.random);
+    if (!h) return;
+    history.push(state.cells);
+    commit(Logic.applyTool(state, [h], h.value === 'filled' ? 'fill' : 'clear'));
+    persist();
+    const el = cellEls[h.r][h.c];
+    el.classList.add('hl');
+    setTimeout(() => el.classList.remove('hl'), 900);
+    if (Logic.isSolved(state)) finish(true);
+  });
+  $('next').addEventListener('click', () => {
+    let next = null;
+    if (kit.nextUnsolved) next = kit.nextUnsolved(counts, progress.isSolved, puzzle.level);
+    if (!next || next === puzzle.id) {
+      const i = order.indexOf(puzzle.id);
+      next = order[(i + 1) % order.length];
+    }
+    load(next);
+  });
+
+  window.addEventListener('pagehide', persist);
+  timer = setInterval(tick, 1000);
+  const last = progress.lastPlayed();
+  $('chooser').open = !last;
+  load(byId[last] ? last : 'easy-1');
+})();
+</script>
+</body>
+</html>
