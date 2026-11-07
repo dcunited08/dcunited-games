@@ -155,6 +155,48 @@
     return state;
   }
 
+  // Which sides of each cell touch another cage (or the board edge): where the dashed outline goes.
+  function cageBorders(puzzle) {
+    const owner = new Array(81).fill(-1);
+    puzzle.cages.forEach((cg, k) => cg.cells.forEach((i) => { owner[i] = k; }));
+    const out = [];
+    for (let i = 0; i < 81; i++) {
+      const r = row(i), c = col(i);
+      const diff = (ok, j) => !ok || owner[j] !== owner[i] || owner[i] < 0;
+      out.push({
+        t: diff(r > 0, i - 9),
+        r: diff(c < 8, i + 1),
+        b: diff(r < 8, i + 9),
+        l: diff(c > 0, i - 1),
+      });
+    }
+    return out;
+  }
+
+  // Cells that share a row, column, box or cage with idx (including idx), sorted.
+  function relatedCells(puzzle, idx) {
+    if (!validIdx(idx)) return [];
+    const cage = cageOf(puzzle, idx);
+    const out = [];
+    for (let i = 0; i < 81; i++) if (sees(i, idx) || (cage && cage.cells.includes(i))) out.push(i);
+    return out;
+  }
+
+  // Filled, non-given cells whose digit differs from the solution.
+  function wrongCells(state, puzzle) {
+    const out = [];
+    for (let i = 0; i < 81; i++) {
+      if (!state.given[i] && state.values[i] && state.values[i] !== puzzle.solution[i]) out.push(i);
+    }
+    return out;
+  }
+
+  // Levels to try for "Next puzzle": this level first, then the others in order.
+  function levelOrder(level) {
+    const at = LEVELS.indexOf(level);
+    return at < 0 ? LEVELS.slice() : LEVELS.slice(at).concat(LEVELS.slice(0, at));
+  }
+
   const getPuzzle = (list, id) => list.find((p) => p.id === id) || null;
 
   function levelCounts(list) {
@@ -166,7 +208,7 @@
   const api = {
     LEVELS, normalisePuzzle, createGame, setDigit, toggleNote, erase, conflicts, isSolved,
     hint, digitCounts, cageOf, cageLabelCell, hasNote, noteDigits, toSave, fromSave,
-    getPuzzle, levelCounts,
+    getPuzzle, levelCounts, cageBorders, relatedCells, wrongCells, levelOrder,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KillerLogic = api;

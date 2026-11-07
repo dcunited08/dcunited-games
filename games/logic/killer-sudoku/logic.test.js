@@ -235,3 +235,43 @@ test('placing a digit also clears notes elsewhere in its cage', () => {
   assert.ok(!L.hasNote(s, 40, 5));
   assert.ok(L.hasNote(s, 41, 5), 'not in the cage and not a peer');
 });
+
+test('cageBorders marks the sides where the neighbour is in another cage or off the board', () => {
+  const p = fixture(); // horizontal dominoes: [0,1] [2,3] ... single at col 8
+  const b = L.cageBorders(p);
+  assert.equal(b.length, 81);
+  assert.deepEqual(b[0], { t: true, r: false, b: true, l: true });
+  assert.deepEqual(b[1], { t: true, r: true, b: true, l: false });
+  assert.deepEqual(b[8], { t: true, r: true, b: true, l: true });
+  assert.deepEqual(b[40], { t: true, r: false, b: true, l: true });
+  const tall = L.normalisePuzzle({ id: 't', difficulty: 'easy', cages: [{ s: 3, c: [0, 9] }], givens: {}, solution: GRID.join('') });
+  const tb = L.cageBorders(tall);
+  assert.deepEqual(tb[0], { t: true, r: true, b: false, l: true });
+  assert.deepEqual(tb[9], { t: false, r: true, b: true, l: true });
+  assert.deepEqual(tb[5], { t: true, r: true, b: true, l: true }, 'cells outside any cage get a full box');
+});
+
+test('relatedCells lists the row, column, box and cage of a cell', () => {
+  const odd = L.normalisePuzzle({ id: 't', difficulty: 'easy', cages: [{ s: 10, c: [0, 40] }], givens: {}, solution: GRID.join('') });
+  const rel = L.relatedCells(odd, 0);
+  assert.deepEqual(rel, [...new Set(rel)].sort((a, b) => a - b));
+  for (const i of [0, 8, 72, 18, 20, 40]) assert.ok(rel.includes(i), String(i));
+  assert.ok(!rel.includes(41));
+  assert.deepEqual(L.relatedCells(odd, -1), []);
+});
+
+test('wrongCells lists filled non-given cells that differ from the solution', () => {
+  const p = fixture({ 0: GRID[0] });
+  let s = L.createGame(p);
+  assert.deepEqual(L.wrongCells(s, p), []);
+  s = L.setDigit(s, 1, GRID[1] === 9 ? 8 : 9);
+  s = L.setDigit(s, 2, GRID[2]);
+  assert.deepEqual(L.wrongCells(s, p), [1]);
+});
+
+test('levelOrder starts at the level and wraps through the rest', () => {
+  assert.deepEqual(L.levelOrder('medium'), ['medium', 'hard', 'easy']);
+  assert.deepEqual(L.levelOrder('hard'), ['hard', 'easy', 'medium']);
+  assert.deepEqual(L.levelOrder('easy'), ['easy', 'medium', 'hard']);
+  assert.deepEqual(L.levelOrder('zzz'), ['easy', 'medium', 'hard']);
+});
