@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Binairo</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  :root {
+    --sun: #d97706;
+    --moon: #1d4ed8;
+    --given-bg: #dbe6f3;
+    --thin: rgba(15, 35, 64, 0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --sun: #fbbf24; --moon: #93c5fd; --given-bg: #243247; }
+  }
+  body { gap: 8px; }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .rules b { color: var(--text); }
+  .puzzle-board {
+    --size: min(100%, 720px, calc(100vh - 480px));
+    --size: min(100%, 720px, calc(100dvh - 480px));
+    min-width: min(100%, 300px);
+    gap: 0;
+    background: var(--panel);
+    position: relative;
+  }
+  .cell {
+    position: relative;
+    border: 1px solid var(--thin);
+    border-radius: 0;
+    line-height: 1;
+    -webkit-touch-callout: none;
+  }
+  .cell.given { background: var(--given-bg); }
+  .cell.error { background: var(--cell-error); box-shadow: inset 0 0 0 3px var(--error-text); }
+  .cell.hinted { animation: hintpulse 1.2s ease-out; }
+  .cell:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 1; }
+  .mark { pointer-events: none; display: block; width: 72%; height: 72%; }
+  .mark svg { display: block; width: 100%; height: 100%; }
+  .cell.sun .mark { color: var(--sun); }
+  .cell.moon .mark { color: var(--moon); }
+  .cell.given .mark { filter: drop-shadow(0 0 0.6px currentColor); }
+  .cell.given.sun .mark svg, .cell.given.moon .mark svg { stroke-width: 2.6; }
+  @keyframes hintpulse { 0% { box-shadow: inset 0 0 0 5px var(--accent); transform: scale(1.12); } 100% { box-shadow: inset 0 0 0 0 transparent; transform: none; } }
+  .board-wrap { width: min(100%, 720px); display: flex; justify-content: center; position: relative; }
+  .board-wrap .puzzle-board { width: var(--size); }
+  .puzzle-board.locked .cell { cursor: default; }
+  .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .info b { color: var(--text); }
+  .message { min-height: 1.5em; }
+  .picker { gap: 8px; }
+  .puzzle-list { gap: 6px; }
+  .solved-panel {
+    width: min(100%, 720px); text-align: center; padding: 16px; border-radius: 14px;
+    background: var(--panel); border: 2px solid var(--accent);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .solved-panel[hidden] { display: none; }
+  .solved-panel h2 { margin: 0; font-size: 26px; }
+  .solved-panel .icons { font-size: 34px; letter-spacing: 6px; }
+  .solved-panel .icons span { display: inline-block; animation: pop 0.8s ease-out both; }
+  .solved-panel .icons span:nth-child(odd) { color: var(--sun); }
+  .solved-panel .icons span:nth-child(even) { color: var(--moon); animation-delay: 0.15s; }
+  @keyframes pop { 0% { transform: scale(0) rotate(-90deg); opacity: 0; } 70% { transform: scale(1.4) rotate(15deg); opacity: 1; } 100% { transform: none; } }
+  .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
+  .picker-wrap { width: min(100%, 720px); }
+  @media (prefers-reduced-motion: reduce) {
+    .cell.hinted, .solved-panel .icons span { animation: none; }
+  }
+  /* Wide and short (iPad landscape): board on the left, everything else in a column on the right. */
+  @media (min-aspect-ratio: 11/10) and (max-height: 900px) {
+    body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); grid-auto-rows: min-content; align-content: start; column-gap: 20px; row-gap: 8px; align-items: start; }
+    body > * { grid-column: 2; width: 100%; }
+    body > .board-wrap { grid-column: 1; grid-row: 1 / span 9; width: 100%; align-self: start; }
+    .puzzle-board { --size: min(calc(100vw - 460px), 720px, calc(100vh - 40px)); --size: min(calc(100vw - 460px), 720px, calc(100dvh - 40px)); }
+    h1 { font-size: 24px; text-align: left; }
+    .rules { text-align: left; }
+    .crumbs { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Binairo</h1>
+<p class="rules">Fill every square with a sun or a moon. No three in a row of the same. Each row and column has equal suns and moons, and no two rows or columns are the same.<br><b>Tap:</b> sun, again: moon.</p>
+<div class="info"><span id="label"></span><span>Time <b id="time">0:00</b></span></div>
+<div class="board-wrap"><div id="board" class="puzzle-board" role="grid" aria-label="Binairo board"></div></div>
+<div class="status message" id="message" aria-live="polite"></div>
+<div class="solved-panel" id="solved" hidden>
+  <div class="icons" aria-hidden="true"><span>☀</span><span>☾</span><span>☀</span><span>☾</span><span>☀</span></div>
+  <h2 id="solvedText">Solved!</h2>
+  <button type="button" class="tool primary" id="nextBtn">Next puzzle</button>
+</div>
+<div class="toolbar">
+  <button type="button" class="tool" id="undoBtn">Undo</button>
+  <button type="button" class="tool" id="restartBtn">Restart</button>
+  <button type="button" class="tool" id="checkBtn">Check</button>
+  <button type="button" class="tool" id="hintBtn">Hint</button>
+  <button type="button" class="tool" id="newBtn">New puzzle</button>
+</div>
+<div class="picker-wrap" id="picker"></div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="logic.js"></script>
+<script src="solver.js"></script>
+<script src="puzzles.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const Kit = LogicKit, Game = BinairoGame, Logic = BinairoLogic, Puzzles = BinairoPuzzles;
+  const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+  const counts = { easy: Puzzles.easy.length, medium: Puzzles.medium.length, hard: Puzzles.hard.length };
+  const progress = Kit.createProgress('binairo');
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), msgEl = $('message'), solvedEl = $('solved');
+
+  // A sun is a filled disc with rays; a moon is a crescent. Different shapes, so colour is not needed.
+  const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.2" fill="currentColor"/><path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3M4.8 4.8l2.1 2.1M17.1 17.1l2.1 2.1M4.8 19.2l2.1-2.1M17.1 6.9l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8.6 8.6 0 0 1 9.4 4.5a8.6 8.6 0 1 0 10.1 10.1z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>';
+
+  let id = null, puzzle = null, game = null, timer = null, cellEls = [];
+  let marks = new Set();          // cells flagged by Check, until the next move
+  let hinted = -1, solvedNow = false, ticker = null;
+
+  const rowCol = (i) => [Math.floor(i / puzzle.length), i % puzzle.length];
+
+  function buildBoard() {
+    const n = puzzle.length;
+    boardEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    boardEl.style.gridTemplateRows = `repeat(${n}, 1fr)`;
+    boardEl.replaceChildren();
+    cellEls = [];
+    for (let i = 0; i < n * n; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell';
+      b.dataset.i = i;
+      b.setAttribute('role', 'gridcell');
+      const m = document.createElement('span');
+      m.className = 'mark';
+      b.append(m);
+      boardEl.append(b);
+      cellEls.push(b);
+    }
+  }
+
+  function render() {
+    const st = game.state();
+    const bad = new Set(game.conflicts());
+    marks.forEach((i) => bad.add(i));
+    const solved = game.isSolved();
+    st.cells.forEach((v, i) => {
+      const el = cellEls[i];
+      const [r, c] = rowCol(i);
+      el.classList.toggle('sun', v === 'sun');
+      el.classList.toggle('moon', v === 'moon');
+      el.classList.toggle('given', st.given[i]);
+      el.classList.toggle('error', bad.has(i));
+      el.classList.toggle('hinted', i === hinted);
+      el.firstChild.innerHTML = v === 'sun' ? SUN_SVG : v === 'moon' ? MOON_SVG : '';
+      el.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, ${v}${st.given[i] ? ', fixed' : ''}`);
+    });
+    $('undoBtn').disabled = solved || !game.canUndo();
+    ['restartBtn', 'checkBtn', 'hintBtn'].forEach((b) => { $(b).disabled = solved; });
+    boardEl.classList.toggle('locked', solved);
+    boardEl.setAttribute('aria-readonly', String(solved));
+  }
+
+  function say(text) { msgEl.textContent = text || ''; }
+  function tickTime() { timeEl.textContent = Kit.formatTime(timer.elapsed(Date.now())); }
+
+  function persist() {
+    if (!id || solvedNow) return;
+    progress.save(id, Game.buildSave(game.state(), timer.elapsed(Date.now())));
+  }
+
+  function afterMove() {
+    marks = new Set();
+    hinted = -1;
+    say('');
+    render();
+    if (game.isSolved()) return finish();
+    persist();
+  }
+
+  function finish() {
+    solvedNow = true;
+    timer.pause(Date.now());
+    tickTime();
+    progress.markSolved(id);
+    progress.clearSave(id);
+    $('solvedText').textContent = `Solved! in ${Kit.formatTime(timer.elapsed(Date.now()))}`;
+    solvedEl.hidden = false;
+    renderPicker();
+    render();
+  }
+
+  function renderPicker() {
+    LogicPicker.render($('picker'), { counts, isSolved: progress.isSolved, current: id, onPick: open });
+  }
+
+  function open(newId) {
+    const p = Kit.parsePuzzleId(newId);
+    if (!p || p.n > counts[p.level]) newId = Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1';
+    const parsed = Kit.parsePuzzleId(newId);
+    id = newId;
+    puzzle = Logic.parsePuzzle(Puzzles[parsed.level][parsed.n - 1]).rows;
+    solvedNow = false;
+    marks = new Set();
+    hinted = -1;
+    solvedEl.hidden = true;
+    let start = null, elapsed = 0;
+    if (!progress.isSolved(id)) {
+      const restored = Game.restoreSave(puzzle, progress.loadSave(id));
+      if (restored) { start = restored.state; elapsed = restored.elapsedMs; }
+    }
+    game = Game.createGame(puzzle, start);
+    timer = Game.createTimer(elapsed);
+    progress.setLastPlayed(id);
+    $('label').textContent = `${LEVEL_NAMES[parsed.level]} · Puzzle ${parsed.n}`;
+    buildBoard();
+    renderPicker();
+    render();
+    if (game.isSolved()) return finish();
+    timer.start(Date.now());
+    tickTime();
+  }
+
+  // Input: a tap (or Enter/Space on a focused square) cycles the square.
+  boardEl.addEventListener('click', (e) => {
+    const b = e.target.closest('.cell');
+    if (!b || !boardEl.contains(b)) return;
+    const [r, c] = rowCol(Number(b.dataset.i));
+    if (game.tap(r, c)) afterMove();
+  });
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  $('undoBtn').addEventListener('click', () => { if (game.undo()) afterMove(); });
+  $('restartBtn').addEventListener('click', () => {
+    game.clear();
+    timer.reset();
+    timer.start(Date.now());
+    tickTime();
+    afterMove();
+  });
+  $('checkBtn').addEventListener('click', () => {
+    const bad = game.mistakes();
+    marks = new Set(bad);
+    hinted = -1;
+    render();
+    say(bad.length ? `${bad.length} ${bad.length === 1 ? 'mistake' : 'mistakes'}` : 'No mistakes so far');
+  });
+  $('hintBtn').addEventListener('click', () => {
+    const h = game.applyHint();
+    if (!h) return;
+    afterMove();
+    hinted = h.r * puzzle.length + h.c;
+    render();
+    say(h.reason);
+  });
+  function goNext() { open(Game.nextPuzzleId(counts, progress.isSolved, id)); }
+  $('nextBtn').addEventListener('click', goNext);
+  $('newBtn').addEventListener('click', goNext);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!timer || solvedNow) return;
+    if (document.hidden) { timer.pause(Date.now()); persist(); } else { timer.start(Date.now()); }
+  });
+  window.addEventListener('pagehide', () => { if (timer && !solvedNow) { timer.pause(Date.now()); persist(); } });
+  ticker = setInterval(() => { if (timer) tickTime(); }, 500);
+
+  open(progress.lastPlayed() || Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1');
+}());
+</script>
+</body>
+</html>
