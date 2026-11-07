@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Star Battle</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  :root {
+    --r0: #f9d5d3; --r1: #fbe3b8; --r2: #f5f0b0; --r3: #cfeac0; --r4: #bfe8e0;
+    --r5: #c4def8; --r6: #d9cdf5; --r7: #f6cde6; --r8: #dcd6cc;
+    --star: #1b2433;
+    --thick: #0f2340;
+    --thin: rgba(15, 35, 64, 0.22);
+  }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 16px; line-height: 1.4; }
+  .rules b { color: var(--text); }
+  .puzzle-board {
+    --size: min(100%, 720px, calc(100vh - 330px));
+    min-width: min(100%, 300px);
+    gap: 0;
+    background: var(--panel);
+    touch-action: none;
+    position: relative;
+  }
+  .cell {
+    position: relative;
+    border-style: solid;
+    border-color: var(--thin);
+    border-width: 1px;
+    border-radius: 0;
+    font-size: clamp(20px, 6.5vw, 44px);
+    line-height: 1;
+    touch-action: none;
+    -webkit-touch-callout: none;
+  }
+  .cell.bt { border-top: 3px solid var(--thick); }
+  .cell.bl { border-left: 3px solid var(--thick); }
+  .cell[data-region="0"] { background: var(--r0); } .cell[data-region="1"] { background: var(--r1); }
+  .cell[data-region="2"] { background: var(--r2); } .cell[data-region="3"] { background: var(--r3); }
+  .cell[data-region="4"] { background: var(--r4); } .cell[data-region="5"] { background: var(--r5); }
+  .cell[data-region="6"] { background: var(--r6); } .cell[data-region="7"] { background: var(--r7); }
+  .cell[data-region="8"] { background: var(--r8); }
+  .cell.error { background: var(--cell-error); }
+  .cell.drag { box-shadow: inset 0 0 0 3px var(--accent); }
+  .cell.hinted { animation: hintpulse 1.2s ease-out; }
+  .cell:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 1; }
+  .mark { pointer-events: none; display: block; }
+  .cell.star .mark { color: var(--star); font-size: 1.15em; }
+  .cell.star.error .mark { color: var(--error-text); }
+  .cell.x .mark { color: rgba(15, 35, 64, 0.45); font-size: 0.75em; font-weight: 400; }
+  .cell.error.x .mark { color: var(--error-text); }
+  .cell.error { box-shadow: inset 0 0 0 3px var(--error-text); }
+  @keyframes hintpulse { 0% { box-shadow: inset 0 0 0 5px var(--accent); transform: scale(1.12); } 100% { box-shadow: inset 0 0 0 0 transparent; transform: none; } }
+  .board-wrap { width: min(100%, 720px); display: flex; justify-content: center; position: relative; }
+  .board-wrap .puzzle-board { width: var(--size); }
+  .puzzle-board.locked .cell { cursor: default; }
+  .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .info b { color: var(--text); }
+  .message { min-height: 2.8em; }
+  .solved-panel {
+    width: min(100%, 720px); text-align: center; padding: 16px; border-radius: 14px;
+    background: var(--panel); border: 2px solid var(--accent);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .solved-panel[hidden] { display: none; }
+  .solved-panel h2 { margin: 0; font-size: 26px; }
+  .solved-panel .stars { font-size: 34px; letter-spacing: 6px; color: #d99a06; }
+  .solved-panel .stars span { display: inline-block; animation: pop 0.8s ease-out both; }
+  .solved-panel .stars span:nth-child(2) { animation-delay: 0.12s; }
+  .solved-panel .stars span:nth-child(3) { animation-delay: 0.24s; }
+  .solved-panel .stars span:nth-child(4) { animation-delay: 0.36s; }
+  .solved-panel .stars span:nth-child(5) { animation-delay: 0.48s; }
+  @keyframes pop { 0% { transform: scale(0) rotate(-90deg); opacity: 0; } 70% { transform: scale(1.4) rotate(15deg); opacity: 1; } 100% { transform: none; } }
+  .cell.star.win .mark { animation: winspin 1s ease-out both; }
+  @keyframes winspin { 0% { transform: scale(1); } 40% { transform: scale(1.5) rotate(20deg); color: #d99a06; } 100% { transform: scale(1); } }
+  .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
+  .picker-wrap { width: min(100%, 720px); }
+  @media (prefers-reduced-motion: reduce) {
+    .cell.hinted, .solved-panel .stars span, .cell.star.win .mark { animation: none; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Star Battle</h1>
+<p class="rules">Put one star in every row, column and colored region. Stars can't touch, not even corners.<br><b>Tap:</b> X, tap again: star. Drag to X many.</p>
+<div class="info"><span id="label"></span><span>Time <b id="time">0:00</b></span></div>
+<div class="board-wrap"><div id="board" class="puzzle-board" role="grid" aria-label="Star Battle board"></div></div>
+<div class="status message" id="message" aria-live="polite"></div>
+<div class="solved-panel" id="solved" hidden>
+  <div class="stars" aria-hidden="true"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+  <h2 id="solvedText">Solved!</h2>
+  <button type="button" class="tool primary" id="nextBtn">Next puzzle</button>
+</div>
+<div class="toolbar">
+  <button type="button" class="tool" id="undoBtn">Undo</button>
+  <button type="button" class="tool" id="restartBtn">Restart</button>
+  <button type="button" class="tool" id="checkBtn">Check</button>
+  <button type="button" class="tool" id="hintBtn">Hint</button>
+  <button type="button" class="tool" id="newBtn">New puzzle</button>
+</div>
+<div class="picker-wrap" id="picker"></div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="logic.js"></script>
+<script src="solver.js"></script>
+<script src="puzzles.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const Kit = LogicKit, Game = StarBattleGame, Logic = StarBattleLogic, Puzzles = StarBattlePuzzles;
+  const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+  const counts = { easy: Puzzles.easy.length, medium: Puzzles.medium.length, hard: Puzzles.hard.length };
+  const progress = Kit.createProgress('star-battle');
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), msgEl = $('message'), solvedEl = $('solved');
+
+  let id = null, puzzle = null, game = null, timer = null, borders = null, cellEls = [];
+  let marks = new Set();          // cells flagged by Check, until the next move
+  let hinted = -1, solvedNow = false, drag = null, ticker = null;
+
+  const rowCol = (i) => [Math.floor(i / puzzle.size), i % puzzle.size];
+  const labelFor = (st) => (st === 'star' ? 'star' : st === 'x' ? 'X' : 'empty');
+
+  function buildBoard() {
+    const n = puzzle.size;
+    boardEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    boardEl.style.gridTemplateRows = `repeat(${n}, 1fr)`;
+    boardEl.replaceChildren();
+    cellEls = [];
+    for (let i = 0; i < n * n; i++) {
+      const [r, c] = rowCol(i);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell' + (borders[i].top ? ' bt' : '') + (borders[i].left ? ' bl' : '');
+      b.dataset.i = i;
+      b.dataset.region = puzzle.regions[r][c];
+      b.setAttribute('role', 'gridcell');
+      const m = document.createElement('span');
+      m.className = 'mark';
+      b.append(m);
+      boardEl.append(b);
+      cellEls.push(b);
+    }
+  }
+
+  function render() {
+    const st = game.state();
+    const bad = new Set(game.conflicts());
+    marks.forEach((i) => bad.add(i));
+    const solved = game.isSolved();
+    st.cells.forEach((v, i) => {
+      const el = cellEls[i];
+      const [r, c] = rowCol(i);
+      el.classList.toggle('star', v === 'star');
+      el.classList.toggle('x', v === 'x');
+      el.classList.toggle('error', bad.has(i));
+      el.classList.toggle('win', solved && v === 'star');
+      el.classList.toggle('hinted', i === hinted);
+      el.firstChild.textContent = v === 'star' ? '★' : v === 'x' ? '×' : '';
+      el.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, ${labelFor(v)}`);
+    });
+    $('undoBtn').disabled = solved || !game.canUndo();
+    ['restartBtn', 'checkBtn', 'hintBtn'].forEach((b) => { $(b).disabled = solved; });
+    boardEl.classList.toggle('locked', solved);
+    boardEl.setAttribute('aria-readonly', String(solved));
+  }
+
+  function say(text) { msgEl.textContent = text || ''; }
+  function tickTime() { timeEl.textContent = Kit.formatTime(timer.elapsed(Date.now())); }
+
+  function persist() {
+    if (!id || solvedNow) return;
+    progress.save(id, Game.buildSave(game.state(), timer.elapsed(Date.now())));
+  }
+
+  function afterMove() {
+    marks = new Set();
+    hinted = -1;
+    say('');
+    render();
+    if (game.isSolved()) return finish();
+    persist();
+  }
+
+  function finish() {
+    solvedNow = true;
+    timer.pause(Date.now());
+    tickTime();
+    progress.markSolved(id);
+    progress.clearSave(id);
+    $('solvedText').textContent = `Solved! in ${Kit.formatTime(timer.elapsed(Date.now()))}`;
+    solvedEl.hidden = false;
+    renderPicker();
+    render();
+  }
+
+  function renderPicker() {
+    LogicPicker.render($('picker'), { counts, isSolved: progress.isSolved, current: id, onPick: open });
+  }
+
+  function open(newId) {
+    const p = Kit.parsePuzzleId(newId);
+    if (!p || p.n > counts[p.level]) newId = Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1';
+    const parsed = Kit.parsePuzzleId(newId);
+    id = newId;
+    puzzle = Logic.parsePuzzle(Puzzles[parsed.level][parsed.n - 1]);
+    borders = Game.regionBorders(puzzle);
+    solvedNow = false;
+    marks = new Set();
+    hinted = -1;
+    drag = null;
+    solvedEl.hidden = true;
+    let start = null, elapsed = 0;
+    if (!progress.isSolved(id)) {
+      const restored = Game.restoreSave(puzzle, progress.loadSave(id));
+      if (restored) { start = restored.state; elapsed = restored.elapsedMs; }
+    }
+    game = Game.createGame(puzzle, start);
+    timer = Game.createTimer(elapsed);
+    progress.setLastPlayed(id);
+    $('label').textContent = `${LEVEL_NAMES[parsed.level]} · Puzzle ${parsed.n}`;
+    buildBoard();
+    renderPicker();
+    render();
+    if (game.isSolved()) return finish();
+    timer.start(Date.now());
+    tickTime();
+  }
+
+  // Input: pointer events on the board. A tap cycles a cell; moving onto other
+  // cells while down is a drag that X's every empty cell passed over.
+  function cellAt(x, y) {
+    const e = document.elementFromPoint(x, y);
+    const b = e && e.closest ? e.closest('.cell') : null;
+    return b && boardEl.contains(b) ? Number(b.dataset.i) : -1;
+  }
+  function markDrag() {
+    cellEls.forEach((el, i) => el.classList.toggle('drag', !!drag && drag.dragging && drag.path.has(i)));
+  }
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (game.isSolved() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0) return;
+    e.preventDefault();
+    try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    drag = { start: i, path: new Set([i]), dragging: false, pointerId: e.pointerId };
+  });
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0 || drag.path.has(i)) return;
+    drag.path.add(i);
+    drag.dragging = true;
+    markDrag();
+  });
+  function endPointer(e, cancelled) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    markDrag();
+    if (cancelled) return;
+    if (d.dragging) {
+      if (game.dragX([...d.path].map(rowCol))) afterMove();
+    } else {
+      const [r, c] = rowCol(d.start);
+      if (game.tap(r, c)) afterMove();
+    }
+  }
+  boardEl.addEventListener('pointerup', (e) => endPointer(e, false));
+  boardEl.addEventListener('pointercancel', (e) => endPointer(e, true));
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+  // Keyboard (Enter/Space) arrives as a click with no pointer: detail is 0.
+  boardEl.addEventListener('click', (e) => {
+    if (e.detail !== 0) return;
+    const b = e.target.closest('.cell');
+    if (!b) return;
+    const [r, c] = rowCol(Number(b.dataset.i));
+    if (game.tap(r, c)) afterMove();
+  });
+
+  $('undoBtn').addEventListener('click', () => { if (game.undo()) afterMove(); });
+  $('restartBtn').addEventListener('click', () => {
+    game.clear();
+    timer.reset();
+    timer.start(Date.now());
+    tickTime();
+    afterMove();
+  });
+  $('checkBtn').addEventListener('click', () => {
+    const bad = game.mistakes();
+    marks = new Set(bad);
+    hinted = -1;
+    render();
+    say(bad.length ? `${bad.length} ${bad.length === 1 ? 'mistake' : 'mistakes'}` : 'No mistakes so far');
+  });
+  $('hintBtn').addEventListener('click', () => {
+    const h = game.applyHint();
+    if (!h) return;
+    afterMove();
+    hinted = h.r * puzzle.size + h.c;
+    render();
+    say(h.reason);
+  });
+  function goNext() { open(Game.nextPuzzleId(counts, progress.isSolved, id)); }
+  $('nextBtn').addEventListener('click', goNext);
+  $('newBtn').addEventListener('click', goNext);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!timer || solvedNow) return;
+    if (document.hidden) { timer.pause(Date.now()); persist(); } else { timer.start(Date.now()); }
+  });
+  window.addEventListener('pagehide', () => { if (timer && !solvedNow) { timer.pause(Date.now()); persist(); } });
+  ticker = setInterval(() => { if (timer) tickTime(); }, 500);
+
+  open(progress.lastPlayed() || Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1');
+}());
+</script>
+</body>
+</html>
