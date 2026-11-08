@@ -36,6 +36,27 @@ test('slitherlink board leaves room for the buttons and level tabs under it', ()
   assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
 });
 
+test('light-up board leaves room for the buttons and level tabs under it', () => {
+  const rules = sizeRules(read('light-up', 'index.html'));
+  assert.ok(rules.length > 0);
+  const portrait = rules.filter((r) => r.includes('100dvh'))[0];
+  assert.ok(portrait, 'uses dvh');
+  const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
+});
+
+test('calcudoku board sizes itself from the visible height and reserves room for the controls', () => {
+  const rules = sizeRules(read('calcudoku', 'index.html'));
+  const dvh = rules.filter((r) => r.includes('100dvh'));
+  assert.ok(dvh.length > 0, 'uses dvh');
+  assert.ok(rules.every((r) => !/\b100vh/.test(r) || rules.some((d) => d.includes('100dvh'))), 'every vh rule has a dvh twin');
+  // The first dvh rule is the portrait one; it must leave room for the toolbar, number pad and picker.
+  const overhead = Number(dvh[0].match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 340, `reserves at least 340px for the other controls (got ${overhead})`);
+  // Landscape puts the controls beside the board.
+  assert.ok(dvh.some((r) => /100vw\s*-\s*\d+px/.test(r)), 'a landscape rule sizes from the width left beside the controls');
+});
+
 test('binairo board leaves room for the buttons and level tabs under it', () => {
   const rules = sizeRules(read('binairo', 'index.html'));
   assert.ok(rules.length > 0);
