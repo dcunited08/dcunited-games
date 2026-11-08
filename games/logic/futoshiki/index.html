@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Futoshiki</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  body { padding: 12px 16px 16px; gap: 8px; min-height: 100vh; min-height: 100dvh; }
+  h1 { font-size: 26px; line-height: 1.1; }
+  .game, .play-area { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .side { width: min(100%, 720px); display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .side > * { width: 100%; }
+
+  /* Board: a grid of 2n-1 tracks. Squares sit on the odd tracks, the < > signs in the thin gutters between them. */
+  .puzzle-board {
+    --size: min(calc(100vw - 32px), 720px, calc(100vh - 360px));
+    --size: min(calc(100vw - 32px), 720px, calc(100dvh - 360px));
+    width: var(--size);
+    min-width: 0;
+    gap: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    container-type: inline-size;
+    grid-template-columns: var(--tracks);
+    grid-template-rows: var(--tracks);
+  }
+  .puzzle-board > * { --u: calc(100cqw / (9 * var(--n) - 3)); }   /* one gutter = 3u, one square = 6u */
+  .cell {
+    position: relative;
+    border: 2px solid #6f8db3;
+    border-radius: 10px;
+    background: var(--panel);
+    font-family: inherit;
+    font-size: calc(var(--u) * 3.6);
+    overflow: hidden;
+  }
+  .cell.related { background: #eaf4fe; }
+  .cell.same { background: #d6ebfc; }
+  .cell.selected { background: var(--cell-selected); box-shadow: inset 0 0 0 3px var(--accent); }
+  .cell.given { background: var(--cell-given); }
+  .cell.conflict, .cell.error { background: var(--cell-error); border-color: var(--error-text); }
+  .cell .val { line-height: 1; font-weight: 600; color: var(--accent); }
+  .cell.given .val { color: var(--text); font-weight: 800; }
+  .cell.conflict .val, .cell.error .val { color: var(--error-text); }
+  .notes {
+    position: absolute; inset: 6%;
+    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+    font-size: calc(var(--u) * 1.6); line-height: 1; font-weight: 600; color: var(--muted);
+    pointer-events: none;
+  }
+  .notes span { display: flex; align-items: center; justify-content: center; }
+
+  .sign { display: flex; align-items: center; justify-content: center; color: var(--text); pointer-events: none; z-index: 1; }
+  .sign svg { width: calc(var(--u) * 2.4); height: calc(var(--u) * 2.4); overflow: visible; }
+  .sign polyline { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .sign.broken { color: var(--error-text); }
+  .sign.broken svg { transform: scale(1.2); }
+
+  .toolbar { gap: 8px; flex-wrap: nowrap; }
+  .toolbar .tool { flex: 1 1 0; min-width: 0; padding: 10px 4px; font-size: 17px; min-height: 52px; }
+  .numpad { display: grid; gap: 8px; grid-template-columns: repeat(var(--n, 5), 1fr); }
+  .numpad .key { max-width: none; min-height: 64px; min-width: 0; padding: 0; font-size: 28px; }
+  .key.done { opacity: 0.35; }
+  .status { display: flex; justify-content: center; align-items: center; gap: 16px; min-height: 28px; }
+  .status .msg { color: var(--muted); }
+
+  .win {
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 14px; padding: 10px 14px; min-height: 64px;
+    display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
+    font-size: 20px; font-weight: 600; text-align: center;
+  }
+  .win[hidden], .numpad[hidden] { display: none; }
+  .win .tool { flex: none; background: var(--accent); color: var(--on-accent); border-color: var(--accent); padding: 12px 22px; }
+
+  .drawers { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+  details { flex: 1 1 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0 14px; }
+  details[open] { flex-basis: 100%; }
+  summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: 17px; }
+  details > :not(summary) { margin-bottom: 14px; }
+  details li { color: var(--muted); font-size: 17px; line-height: 1.45; }
+  details ul { padding-left: 22px; margin: 6px 0; }
+
+  /* Landscape: board on the left, controls on the right. */
+  @media (orientation: landscape) and (min-width: 700px) {
+    body { padding-top: 6px; padding-bottom: 8px; gap: 6px; }
+    h1 { font-size: 22px; }
+    .play-area { flex-direction: row; justify-content: center; align-items: flex-start; gap: 20px; }
+    .puzzle-board { --size: min(calc(100vw - 420px), 720px, calc(100vh - 106px)); --size: min(calc(100vw - 420px), 720px, calc(100dvh - 106px)); flex: none; }
+    .side { width: 360px; flex: none; }
+    .toolbar { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .toolbar .tool { min-height: 52px; }
+    .numpad { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .numpad .key { min-height: 64px; font-size: 30px; }
+    .drawers { flex-direction: column; flex-wrap: nowrap; }
+    details, details[open] { flex: none; width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .numpad { gap: 4px; }
+    .numpad .key { min-height: 52px; font-size: 24px; }
+    .toolbar { gap: 4px; }
+    .toolbar .tool { font-size: 13px; min-height: 48px; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Futoshiki</h1>
+
+<div class="game">
+  <div class="play-area">
+    <div class="puzzle-board" id="board" role="grid" aria-label="Futoshiki board"></div>
+    <div class="side">
+      <div class="status"><span id="title"></span><b id="timer">0:00</b><span class="msg" id="msg" role="status" aria-live="polite"></span></div>
+      <div class="toolbar">
+        <button class="tool" id="undo" type="button">Undo</button>
+        <button class="tool" id="notes" type="button" aria-pressed="false">Notes: off</button>
+        <button class="tool" id="erase" type="button">Erase</button>
+        <button class="tool" id="check" type="button">Check</button>
+        <button class="tool" id="hint" type="button">Hint</button>
+        <button class="tool" id="restart" type="button">Restart</button>
+      </div>
+      <div class="numpad" id="pad"></div>
+      <div class="win" id="win" hidden>
+        <span id="winText">Solved!</span>
+        <button class="tool" id="next" type="button">Next puzzle</button>
+      </div>
+      <div class="drawers">
+        <details id="pickerBox">
+          <summary id="pickerSummary">Choose a puzzle</summary>
+          <div id="picker"></div>
+        </details>
+        <details>
+          <summary>How to play</summary>
+          <ul>
+            <li>Fill the grid so every row and column has each number once.</li>
+            <li>The signs between squares must be true. The open side of the sign faces the bigger number.</li>
+            <li>Tap a square, then tap a number. Tap the same number again to clear it.</li>
+            <li>Turn on Notes for small pencil marks. Placing a number clears it from the notes in its row and column.</li>
+            <li>Red means a rule is broken. Check shows squares that differ from the answer. Hint fills in one square.</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="puzzles.js"></script>
+<script src="logic.js"></script>
+<script>
+(function () {
+  const kit = window.LogicKit, L = window.FutoshikiLogic, list = window.FutoshikiPuzzles;
+  const progress = kit.createProgress('futoshiki');
+  const counts = L.levelCounts(list);
+  const history = kit.createHistory();
+  const $ = (id) => document.getElementById(id);
+  const NS = 'http://www.w3.org/2000/svg';
+  // Chevron drawn in a 10x10 box; the open side faces the bigger number.
+  const SHAPES = { '<': '7,1 3,5 7,9', '>': '3,1 7,5 3,9', '^': '1,7 5,3 9,7', 'v': '1,3 5,7 9,3' };
+
+  let puzzle = null, state = null, n = 0;
+  let selected = -1, notesMode = false, wrong = new Set(), solved = false;
+  let elapsed = 0, lastTick = Date.now();
+  let cells = [], keys = [], signEls = [];
+  const board = $('board'), pad = $('pad');
+
+  function signEl(kind, r, c, ch) {
+    const el = document.createElement('div');
+    el.className = 'sign';
+    el.style.gridRow = String(kind === 'h' ? 2 * r + 1 : 2 * r + 2);
+    el.style.gridColumn = String(kind === 'h' ? 2 * c + 2 : 2 * c + 1);
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 10 10');
+    const line = document.createElementNS(NS, 'polyline');
+    line.setAttribute('points', SHAPES[kind === 'h' ? ch : (ch === '<' ? '^' : 'v')]);
+    svg.append(line);
+    el.append(svg);
+    el.dataset.key = kind + r + '-' + c;
+    return el;
+  }
+
+  // ---- Build the board and number pad for the current puzzle ----
+  function build() {
+    n = puzzle.size;
+    board.replaceChildren();
+    board.style.setProperty('--n', n);
+    board.style.setProperty('--tracks', Array.from({ length: 2 * n - 1 }, (_, i) => (i % 2 ? 'minmax(0,3fr)' : 'minmax(0,6fr)')).join(' '));
+    cells = [];
+    signEls = [];
+    for (let i = 0; i < n * n; i++) {
+      const r = Math.floor(i / n), c = i % n;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell';
+      b.style.gridRow = String(2 * r + 1);
+      b.style.gridColumn = String(2 * c + 1);
+      b.setAttribute('role', 'gridcell');
+      b.addEventListener('click', () => select(i));
+      board.append(b);
+      cells.push(b);
+    }
+    for (let r = 0; r < n; r++) for (let c = 0; c < n - 1; c++) {
+      const ch = puzzle.h[r * (n - 1) + c];
+      if (ch !== '.') { const el = signEl('h', r, c, ch); board.append(el); signEls.push(el); }
+    }
+    for (let r = 0; r < n - 1; r++) for (let c = 0; c < n; c++) {
+      const ch = puzzle.v[r * n + c];
+      if (ch !== '.') { const el = signEl('v', r, c, ch); board.append(el); signEls.push(el); }
+    }
+    pad.replaceChildren();
+    pad.style.setProperty('--n', n);
+    keys = [];
+    for (let d = 1; d <= n; d++) {
+      const k = document.createElement('button');
+      k.type = 'button';
+      k.className = 'key';
+      k.textContent = d;
+      k.setAttribute('aria-label', 'Number ' + d);
+      k.addEventListener('click', () => press(d));
+      pad.append(k);
+      keys.push(k);
+    }
+  }
+
+  // ---- Persistence ----
+  function persist() {
+    progress.save(puzzle.id, { state: L.toSave(state), elapsed: Math.round(elapsed) });
+  }
+
+  // ---- Loading a puzzle ----
+  function load(id) {
+    const raw = L.getPuzzle(list, id);
+    if (!raw) return;
+    puzzle = L.normalisePuzzle(raw);
+    build();
+    const saved = progress.loadSave(id);
+    state = saved && L.fromSave(saved.state, puzzle);
+    elapsed = state && Number.isFinite(saved.elapsed) ? Math.max(0, saved.elapsed) : 0;
+    if (!state) state = L.createGame(puzzle);
+    history.clear();
+    notesMode = false;
+    wrong = new Set();
+    solved = false;
+    selected = -1;
+    lastTick = Date.now();
+    progress.setLastPlayed(id);
+    $('win').hidden = true;
+    pad.hidden = false;
+    $('msg').textContent = '';
+    const label = kit.parsePuzzleId(id);
+    $('title').textContent = label.level[0].toUpperCase() + label.level.slice(1) + ' ' + label.n;
+    $('pickerBox').open = false;
+    renderPicker();
+    render();
+    updateTimer();
+  }
+
+  function renderPicker() {
+    window.LogicPicker.render($('picker'), {
+      counts,
+      isSolved: progress.isSolved,
+      current: puzzle.id,
+      onPick: (id) => load(id),
+    });
+    $('pickerSummary').textContent = 'Choose a puzzle (' + $('title').textContent + ')';
+  }
+
+  // ---- Drawing ----
+  function render() {
+    const bad = new Set(L.conflicts(state, puzzle));
+    const brokenKeys = new Set(L.brokenSigns(state, puzzle).map((s) => s.kind + s.r + '-' + s.c));
+    const selDigit = selected >= 0 ? state.values[selected] : 0;
+    const sr = Math.floor(selected / n), sc = selected % n;
+    for (let i = 0; i < n * n; i++) {
+      const el = cells[i], v = state.values[i];
+      const r = Math.floor(i / n), c = i % n;
+      el.classList.toggle('given', state.given[i]);
+      el.classList.toggle('related', selected >= 0 && i !== selected && (r === sr || c === sc));
+      el.classList.toggle('same', selDigit > 0 && v === selDigit);
+      el.classList.toggle('selected', i === selected);
+      el.classList.toggle('conflict', bad.has(i));
+      el.classList.toggle('error', wrong.has(i));
+      let html = '';
+      if (v) html += '<span class="val">' + v + '</span>';
+      else if (state.notes[i]) {
+        html += '<span class="notes">';
+        for (let d = 1; d <= 9; d++) html += '<span>' + (d <= n && L.hasNote(state, i, d) ? d : '') + '</span>';
+        html += '</span>';
+      }
+      el.innerHTML = html;
+      el.setAttribute('aria-label', 'Row ' + (r + 1) + ', column ' + (c + 1) + (v ? ', ' + v : ', empty') + (state.given[i] ? ', given' : ''));
+    }
+    signEls.forEach((el) => el.classList.toggle('broken', brokenKeys.has(el.dataset.key)));
+    const dc = L.digitCounts(state, n);
+    keys.forEach((k, idx) => k.classList.toggle('done', dc[idx + 1] >= n));
+    $('undo').disabled = !history.canUndo();
+    const nb = $('notes');
+    nb.setAttribute('aria-pressed', String(notesMode));
+    nb.textContent = 'Notes: ' + (notesMode ? 'on' : 'off');
+  }
+
+  function updateTimer() { $('timer').textContent = kit.formatTime(elapsed); }
+
+  setInterval(() => {
+    const now = Date.now();
+    if (!solved && !document.hidden && puzzle) {
+      elapsed += Math.min(now - lastTick, 2000);
+      updateTimer();
+      if (Math.floor(elapsed / 5000) !== Math.floor((elapsed - (now - lastTick)) / 5000)) persist();
+    }
+    lastTick = now;
+  }, 500);
+  document.addEventListener('visibilitychange', () => { lastTick = Date.now(); if (document.hidden && puzzle && !solved) persist(); });
+
+  // ---- Actions ----
+  function select(i) { selected = i; render(); }
+
+  // Applies a state change: undo snapshot, save, win check.
+  function commit(next) {
+    if (next === state || solved) return;
+    history.push({ state: L.toSave(state) });
+    state = next;
+    wrong = new Set();
+    $('msg').textContent = '';
+    persist();
+    if (L.isSolved(state, puzzle)) win();
+    render();
+  }
+
+  function press(d) {
+    if (solved) return;
+    if (selected < 0) { $('msg').textContent = 'Tap a square first.'; return; }
+    commit(notesMode ? L.toggleNote(state, selected, d) : L.setDigit(state, selected, d));
+  }
+
+  function win() {
+    solved = true;
+    progress.markSolved(puzzle.id);
+    progress.clearSave(puzzle.id);
+    $('winText').textContent = 'Solved in ' + kit.formatTime(elapsed) + '! Well done.';
+    pad.hidden = true;
+    $('win').hidden = false;
+    $('next').hidden = false;
+    renderPicker();
+  }
+
+  function nextId() {
+    const level = kit.parsePuzzleId(puzzle.id).level;
+    for (const lv of L.levelOrder(level)) {
+      const id = kit.nextUnsolved(counts, progress.isSolved, lv);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  $('next').addEventListener('click', () => {
+    const id = nextId();
+    if (id) load(id);
+    else { $('winText').textContent = 'You have solved every puzzle!'; $('next').hidden = true; }
+  });
+  $('notes').addEventListener('click', () => { notesMode = !notesMode; render(); });
+  $('erase').addEventListener('click', () => { if (selected >= 0) commit(L.erase(state, selected)); });
+  $('undo').addEventListener('click', undo);
+  function undo() {
+    if (solved) return;
+    const snap = history.undo();
+    if (!snap) return;
+    const prev = L.fromSave(snap.state, puzzle);
+    if (prev) { state = prev; wrong = new Set(); persist(); render(); }
+  }
+  $('check').addEventListener('click', () => {
+    wrong = new Set(L.wrongCells(state, puzzle));
+    $('msg').textContent = wrong.size ? wrong.size + ' square' + (wrong.size > 1 ? 's' : '') + ' to fix' : 'No mistakes so far';
+    render();
+  });
+  $('hint').addEventListener('click', () => {
+    const h = L.hint(state, puzzle, selected);
+    if (h.idx < 0) return;
+    selected = h.idx;
+    commit(h.state);
+  });
+  $('restart').addEventListener('click', () => {
+    if (!window.confirm('Start this puzzle again from the beginning?')) return;
+    state = L.createGame(puzzle);
+    history.clear();
+    elapsed = 0;
+    wrong = new Set();
+    solved = false;
+    $('win').hidden = true;
+    pad.hidden = false;
+    $('msg').textContent = '';
+    persist();
+    updateTimer();
+    render();
+  });
+
+  // ---- Keyboard ----
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (/^[1-9]$/.test(k)) { press(Number(k)); e.preventDefault(); }
+    else if (k === 'Backspace' || k === 'Delete' || k === '0') { if (selected >= 0) commit(L.erase(state, selected)); e.preventDefault(); }
+    else if (k === 'n' || k === 'N') { notesMode = !notesMode; render(); }
+    else if (k.startsWith('Arrow')) {
+      const at = selected < 0 ? 0 : selected;
+      const r = Math.floor(at / n), c = at % n;
+      const nr = Math.min(n - 1, Math.max(0, r + (k === 'ArrowDown') - (k === 'ArrowUp')));
+      const nc = Math.min(n - 1, Math.max(0, c + (k === 'ArrowRight') - (k === 'ArrowLeft')));
+      select(selected < 0 ? 0 : nr * n + nc);
+      e.preventDefault();
+    }
+  });
+
+  // ---- Start: last played, else the first unsolved easy ----
+  const last = progress.lastPlayed();
+  load(last && L.getPuzzle(list, last) ? last : (kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1'));
+}());
+</script>
+</body>
+</html>
