@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Light Up</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  :root {
+    --wall: #1b2433;
+    --wall-text: #ffffff;
+    --lit: #ffec9a;
+    --lit-win: #ffe066;
+    --bulb: #f5b800;
+    --bulb-edge: #8a5a00;
+    --grid-line: rgba(15, 35, 64, 0.28);
+  }
+  body { gap: 8px; }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .rules b { color: var(--text); }
+  .puzzle-board {
+    --size: min(100%, 720px, calc(100vh - 500px));
+    --size: min(100%, 720px, calc(100dvh - 500px));
+    min-width: min(100%, 300px);
+    gap: 1px;
+    background: var(--grid-line);
+    touch-action: none;
+    position: relative;
+  }
+  .cell {
+    position: relative;
+    border: 0;
+    border-radius: 0;
+    font-size: clamp(20px, 6.5vw, 44px);
+    font-weight: 700;
+    line-height: 1;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    background: var(--panel);
+    transition: background 0.15s;
+  }
+  .cell.lit { background: var(--lit); }
+  .cell.wall { background: var(--wall); color: var(--wall-text); cursor: default; }
+  .cell.wall .num { transition: opacity 0.15s; }
+  .cell.wall.done .num { opacity: 0.35; }
+  .cell.wall.error { background: var(--wall); box-shadow: inset 0 0 0 3px #ef4444; }
+  .cell.wall.error .num { color: #ff9b9b; }
+  .cell.error:not(.wall) { background: var(--cell-error); box-shadow: inset 0 0 0 3px var(--error-text); }
+  .cell.drag { box-shadow: inset 0 0 0 3px var(--accent); }
+  .cell.hinted { animation: hintpulse 1.2s ease-out; }
+  .cell:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 1; }
+  .mark { pointer-events: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+  .mark svg { width: 74%; height: 74%; display: block; filter: drop-shadow(0 0 3px rgba(245, 184, 0, 0.9)); }
+  .mark svg .glass { fill: var(--bulb); stroke: var(--bulb-edge); stroke-width: 1.2; }
+  .mark svg .base { fill: #6b7280; stroke: #374151; stroke-width: 0.8; }
+  .cell.error .mark svg .glass { fill: #ef4444; stroke: #7f1d1d; }
+  .cell.error .mark svg { filter: none; }
+  .cell.dot .mark::before { content: ""; width: 18%; height: 18%; border-radius: 50%; background: rgba(15, 35, 64, 0.5); }
+  .cell.dot.error .mark::before { background: var(--error-text); }
+  @keyframes hintpulse { 0% { box-shadow: inset 0 0 0 5px var(--accent); transform: scale(1.12); } 100% { box-shadow: inset 0 0 0 0 transparent; transform: none; } }
+  .board-wrap { width: min(100%, 720px); display: flex; justify-content: center; position: relative; }
+  .board-wrap .puzzle-board { width: var(--size); }
+  .puzzle-board.locked .cell { cursor: default; }
+  .puzzle-board.locked .cell.lit { background: var(--lit-win); }
+  .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .info b { color: var(--text); }
+  .message { min-height: 1.5em; }
+  .picker { gap: 8px; }
+  .puzzle-list { gap: 6px; }
+  .solved-panel {
+    width: min(100%, 720px); text-align: center; padding: 16px; border-radius: 14px;
+    background: var(--panel); border: 2px solid var(--accent);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .solved-panel[hidden] { display: none; }
+  .solved-panel h2 { margin: 0; font-size: 26px; }
+  .solved-panel .bulbs { font-size: 34px; letter-spacing: 6px; }
+  .solved-panel .bulbs span { display: inline-block; animation: pop 0.8s ease-out both; }
+  .solved-panel .bulbs span:nth-child(2) { animation-delay: 0.12s; }
+  .solved-panel .bulbs span:nth-child(3) { animation-delay: 0.24s; }
+  @keyframes pop { 0% { transform: scale(0) rotate(-90deg); opacity: 0; } 70% { transform: scale(1.4) rotate(15deg); opacity: 1; } 100% { transform: none; } }
+  .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
+  .picker-wrap { width: min(100%, 720px); }
+  @media (prefers-reduced-motion: reduce) {
+    .cell.hinted, .solved-panel .bulbs span, .cell, .cell.wall .num { animation: none; transition: none; }
+  }
+  /* Wide and short (iPad landscape): board on the left, everything else in a column on the right. */
+  @media (min-aspect-ratio: 11/10) and (max-height: 900px) {
+    body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); grid-auto-rows: min-content; align-content: start; column-gap: 20px; row-gap: 8px; align-items: start; }
+    body > * { grid-column: 2; width: 100%; }
+    body > .board-wrap { grid-column: 1; grid-row: 1 / span 9; width: 100%; align-self: start; }
+    .puzzle-board { --size: min(calc(100vw - 460px), 720px, calc(100vh - 40px)); --size: min(calc(100vw - 460px), 720px, calc(100dvh - 40px)); }
+    h1 { font-size: 24px; text-align: left; }
+    .rules { text-align: left; font-size: 14px; }
+    .crumbs { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Light Up</h1>
+<p class="rules">Light every white square. Bulbs shine along rows and columns until a wall, and can't shine on each other. A number shows how many bulbs touch that wall.<br><b>Tap:</b> bulb, tap again: dot. Drag to dot many.</p>
+<div class="info"><span id="label"></span><span>Time <b id="time">0:00</b></span></div>
+<div class="board-wrap"><div id="board" class="puzzle-board" role="grid" aria-label="Light Up board"></div></div>
+<div class="status message" id="message" aria-live="polite"></div>
+<div class="solved-panel" id="solved" hidden>
+  <div class="bulbs" aria-hidden="true"><span>&#128161;</span><span>&#128161;</span><span>&#128161;</span></div>
+  <h2 id="solvedText">Solved!</h2>
+  <button type="button" class="tool primary" id="nextBtn">Next puzzle</button>
+</div>
+<div class="toolbar">
+  <button type="button" class="tool" id="undoBtn">Undo</button>
+  <button type="button" class="tool" id="restartBtn">Restart</button>
+  <button type="button" class="tool" id="checkBtn">Check</button>
+  <button type="button" class="tool" id="hintBtn">Hint</button>
+  <button type="button" class="tool" id="newBtn">New puzzle</button>
+</div>
+<div class="picker-wrap" id="picker"></div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="logic.js"></script>
+<script src="solver.js"></script>
+<script src="puzzles.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const Kit = LogicKit, Game = LightUpGame, Logic = LightUpLogic, Puzzles = LightUpPuzzles;
+  const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+  const counts = { easy: Puzzles.easy.length, medium: Puzzles.medium.length, hard: Puzzles.hard.length };
+  const progress = Kit.createProgress('light-up');
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), msgEl = $('message'), solvedEl = $('solved');
+  const BULB_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="glass" d="M12 2.5a7.2 7.2 0 0 0-4.2 13.1c.6.5.9 1.1.9 1.8v.6h6.6v-.6c0-.7.3-1.3.9-1.8A7.2 7.2 0 0 0 12 2.5z"/><rect class="base" x="8.6" y="18.6" width="6.8" height="2" rx="1"/><rect class="base" x="9.8" y="20.8" width="4.4" height="1.6" rx="0.8"/></svg>';
+
+  let id = null, puzzle = null, game = null, timer = null, cellEls = [];
+  let marks = new Set();          // cells flagged by Check, until the next move
+  let hinted = -1, solvedNow = false, drag = null;
+
+  const rowCol = (i) => [Math.floor(i / puzzle.size), i % puzzle.size];
+  const labelFor = (st) => (st === 'bulb' ? 'bulb' : st === 'dot' ? 'dot' : 'empty');
+
+  function buildBoard() {
+    const n = puzzle.size;
+    boardEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    boardEl.style.gridTemplateRows = `repeat(${n}, 1fr)`;
+    boardEl.replaceChildren();
+    cellEls = [];
+    for (let i = 0; i < n * n; i++) {
+      const [r, c] = rowCol(i);
+      let b;
+      if (puzzle.wall[i]) {
+        b = document.createElement('div');
+        b.className = 'cell wall';
+        const num = puzzle.num[i];
+        const t = document.createElement('span');
+        t.className = 'num';
+        t.textContent = num >= 0 ? String(num) : '';
+        b.append(t);
+        b.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, wall${num >= 0 ? ` ${num}` : ''}`);
+      } else {
+        b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cell';
+        const m = document.createElement('span');
+        m.className = 'mark';
+        b.append(m);
+      }
+      b.dataset.i = i;
+      b.setAttribute('role', 'gridcell');
+      boardEl.append(b);
+      cellEls.push(b);
+    }
+  }
+
+  function render() {
+    const st = game.state();
+    const bad = new Set(game.conflicts());
+    marks.forEach((i) => bad.add(i));
+    const lit = game.lit();
+    const ws = game.wallStatus();
+    const solved = game.isSolved();
+    st.cells.forEach((v, i) => {
+      const el = cellEls[i];
+      el.classList.toggle('error', bad.has(i));
+      el.classList.toggle('hinted', i === hinted);
+      if (puzzle.wall[i]) {
+        el.classList.toggle('done', ws[i] === 'done');
+        return;
+      }
+      const [r, c] = rowCol(i);
+      const wasBulb = el.classList.contains('bulb');
+      el.classList.toggle('lit', lit[i] > 0);
+      el.classList.toggle('bulb', v === 'bulb');
+      el.classList.toggle('dot', v === 'dot');
+      if (wasBulb !== (v === 'bulb')) el.firstChild.innerHTML = v === 'bulb' ? BULB_SVG : '';
+      el.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, ${labelFor(v)}${lit[i] > 0 ? ', lit' : ''}`);
+    });
+    $('undoBtn').disabled = solved || !game.canUndo();
+    ['restartBtn', 'checkBtn', 'hintBtn'].forEach((b) => { $(b).disabled = solved; });
+    boardEl.classList.toggle('locked', solved);
+    boardEl.setAttribute('aria-readonly', String(solved));
+  }
+
+  function say(text) { msgEl.textContent = text || ''; }
+  function tickTime() { timeEl.textContent = Kit.formatTime(timer.elapsed(Date.now())); }
+
+  function persist() {
+    if (!id || solvedNow) return;
+    progress.save(id, Game.buildSave(game.state(), timer.elapsed(Date.now())));
+  }
+
+  function afterMove() {
+    marks = new Set();
+    hinted = -1;
+    say('');
+    render();
+    if (game.isSolved()) return finish();
+    persist();
+  }
+
+  function finish() {
+    solvedNow = true;
+    timer.pause(Date.now());
+    tickTime();
+    progress.markSolved(id);
+    progress.clearSave(id);
+    $('solvedText').textContent = `Solved! in ${Kit.formatTime(timer.elapsed(Date.now()))}`;
+    solvedEl.hidden = false;
+    renderPicker();
+    render();
+  }
+
+  function renderPicker() {
+    LogicPicker.render($('picker'), { counts, isSolved: progress.isSolved, current: id, onPick: open });
+  }
+
+  function open(newId) {
+    const p = Kit.parsePuzzleId(newId);
+    if (!p || p.n > counts[p.level]) newId = Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1';
+    const parsed = Kit.parsePuzzleId(newId);
+    id = newId;
+    puzzle = Logic.parsePuzzle(Puzzles[parsed.level][parsed.n - 1]);
+    solvedNow = false;
+    marks = new Set();
+    hinted = -1;
+    drag = null;
+    solvedEl.hidden = true;
+    let start = null, elapsed = 0;
+    if (!progress.isSolved(id)) {
+      const restored = Game.restoreSave(puzzle, progress.loadSave(id));
+      if (restored) { start = restored.state; elapsed = restored.elapsedMs; }
+    }
+    game = Game.createGame(puzzle, start);
+    timer = Game.createTimer(elapsed);
+    progress.setLastPlayed(id);
+    $('label').textContent = `${LEVEL_NAMES[parsed.level]} · Puzzle ${parsed.n}`;
+    say('');
+    buildBoard();
+    renderPicker();
+    render();
+    if (game.isSolved()) return finish();
+    timer.start(Date.now());
+    tickTime();
+  }
+
+  // Input: pointer events on the board. A tap cycles a cell; moving onto other
+  // cells while down is a drag that dots every empty cell passed over.
+  function cellAt(x, y) {
+    const e = document.elementFromPoint(x, y);
+    const b = e && e.closest ? e.closest('.cell') : null;
+    if (!b || !boardEl.contains(b)) return -1;
+    const i = Number(b.dataset.i);
+    return puzzle.wall[i] ? -1 : i;
+  }
+  function markDrag() {
+    cellEls.forEach((el, i) => el.classList.toggle('drag', !!drag && drag.dragging && drag.path.has(i)));
+  }
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (game.isSolved() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0) return;
+    e.preventDefault();
+    try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    drag = { start: i, path: new Set([i]), dragging: false, pointerId: e.pointerId };
+  });
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0 || drag.path.has(i)) return;
+    drag.path.add(i);
+    drag.dragging = true;
+    markDrag();
+  });
+  function endPointer(e, cancelled) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    markDrag();
+    if (cancelled) return;
+    if (d.dragging) {
+      if (game.dragDot([...d.path].map(rowCol))) afterMove();
+    } else {
+      const [r, c] = rowCol(d.start);
+      if (game.tap(r, c)) afterMove();
+    }
+  }
+  boardEl.addEventListener('pointerup', (e) => endPointer(e, false));
+  boardEl.addEventListener('pointercancel', (e) => endPointer(e, true));
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+  // Keyboard (Enter/Space) arrives as a click with no pointer: detail is 0.
+  boardEl.addEventListener('click', (e) => {
+    if (e.detail !== 0) return;
+    const b = e.target.closest('.cell');
+    if (!b || puzzle.wall[Number(b.dataset.i)]) return;
+    const [r, c] = rowCol(Number(b.dataset.i));
+    if (game.tap(r, c)) afterMove();
+  });
+
+  $('undoBtn').addEventListener('click', () => { if (game.undo()) afterMove(); });
+  $('restartBtn').addEventListener('click', () => {
+    game.clear();
+    timer.reset();
+    timer.start(Date.now());
+    tickTime();
+    afterMove();
+  });
+  $('checkBtn').addEventListener('click', () => {
+    const bad = game.mistakes();
+    marks = new Set(bad);
+    hinted = -1;
+    render();
+    say(bad.length ? `${bad.length} ${bad.length === 1 ? 'mistake' : 'mistakes'}` : 'No mistakes so far');
+  });
+  $('hintBtn').addEventListener('click', () => {
+    const h = game.applyHint();
+    if (!h) return;
+    afterMove();
+    hinted = h.r * puzzle.size + h.c;
+    render();
+    say(h.reason);
+  });
+  function goNext() { open(Game.nextPuzzleId(counts, progress.isSolved, id)); }
+  $('nextBtn').addEventListener('click', goNext);
+  $('newBtn').addEventListener('click', goNext);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!timer || solvedNow) return;
+    if (document.hidden) { timer.pause(Date.now()); persist(); } else { timer.start(Date.now()); }
+  });
+  window.addEventListener('pagehide', () => { if (timer && !solvedNow) { timer.pause(Date.now()); persist(); } });
+  setInterval(() => { if (timer) tickTime(); }, 500);
+
+  open(progress.lastPlayed() || Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1');
+}());
+</script>
+</body>
+</html>
