@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hashi</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  :root {
+    --bridge: #0f2340;
+    --done-fill: #dcebe2;
+    --done-line: #4d7d63;
+    --over-fill: #fde2e2;
+  }
+  body { gap: 8px; }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .rules b { color: var(--text); }
+  .puzzle-board {
+    --size: min(100%, 720px, calc(100vh - 560px));
+    --size: min(100%, 720px, calc(100dvh - 560px));
+    min-width: min(100%, 300px);
+    display: block;
+    background: var(--panel);
+    touch-action: none;
+    position: relative;
+  }
+  .board-wrap { width: min(100%, 720px); display: flex; justify-content: center; position: relative; }
+  .board-wrap .puzzle-board { width: var(--size); }
+  svg.board { display: block; width: 100%; height: 100%; touch-action: none; -webkit-touch-callout: none; }
+  .dot { fill: var(--line); }
+  .hit { stroke: transparent; stroke-width: 0.8; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+  .bridge { stroke: var(--bridge); stroke-width: 0.075; stroke-linecap: round; pointer-events: none; }
+  .bridge.wrong { stroke: var(--error-text); stroke-width: 0.1; }
+  .bridge.hinted { animation: bridgepulse 1.2s ease-out; }
+  .preview-line { stroke: var(--accent); stroke-width: 0.08; stroke-dasharray: 0.18 0.14; stroke-linecap: round; pointer-events: none; }
+  .isl { cursor: pointer; outline: none; }
+  .isl circle { fill: var(--panel); stroke: var(--bridge); stroke-width: 0.07; }
+  .isl text { fill: var(--text); font: 700 0.52px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; -webkit-user-select: none; }
+  .isl.done circle { fill: var(--done-fill); stroke: var(--done-line); }
+  .isl.over circle { fill: var(--over-fill); stroke: var(--error-text); }
+  .isl.over text { fill: var(--error-text); }
+  .isl.selected circle { stroke: var(--accent); stroke-width: 0.16; }
+  .isl.target circle { stroke: var(--accent); stroke-width: 0.12; stroke-dasharray: 0.2 0.12; }
+  .isl:focus-visible circle { stroke: var(--accent); stroke-width: 0.16; }
+  .isl.win circle { animation: winpop 0.9s ease-out both; transform-box: fill-box; transform-origin: center; }
+  @keyframes bridgepulse { 0% { stroke: var(--accent); stroke-width: 0.26; } 100% { stroke: var(--bridge); stroke-width: 0.075; } }
+  @keyframes winpop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+  .puzzle-board.locked .isl, .puzzle-board.locked .hit { cursor: default; }
+  .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .info b { color: var(--text); }
+  .message { min-height: 1.5em; }
+  .picker { gap: 8px; }
+  .puzzle-list { gap: 6px; }
+  .solved-panel {
+    width: min(100%, 720px); text-align: center; padding: 10px 16px; border-radius: 14px;
+    background: var(--panel); border: 2px solid var(--accent);
+    display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .solved-panel[hidden] { display: none; }
+  .solved-panel h2 { margin: 0; font-size: 24px; }
+  .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
+  .picker-wrap { width: min(100%, 720px); }
+  @media (prefers-reduced-motion: reduce) {
+    .bridge.hinted, .isl.win circle { animation: none; }
+  }
+  /* Wide and short (iPad landscape): board on the left, everything else in a column on the right. */
+  @media (min-aspect-ratio: 11/10) and (max-height: 1100px) {
+    body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); grid-auto-rows: min-content; align-content: start; column-gap: 20px; row-gap: 8px; align-items: start; }
+    body > * { grid-column: 2; width: 100%; }
+    body > .board-wrap { grid-column: 1; grid-row: 1 / span 9; width: 100%; align-self: start; }
+    .puzzle-board { --size: min(calc(100vw - 460px), 720px, calc(100vh - 40px)); --size: min(calc(100vw - 460px), 720px, calc(100dvh - 40px)); }
+    h1 { font-size: 24px; text-align: left; }
+    .rules { text-align: left; }
+    .crumbs { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Hashi</h1>
+<p class="rules">Join the islands with bridges. Each number is how many bridges touch that island. Bridges run straight, can't cross, and at most two join a pair. All islands must link up.<br><b>Drag from island to island to build a bridge.</b> Do it again for a double, a third time to remove.</p>
+<div class="info"><span id="label"></span><span>Time <b id="time">0:00</b></span></div>
+<div class="board-wrap"><div id="board" class="puzzle-board" role="group" aria-label="Hashi board"></div></div>
+<div class="status message" id="message" aria-live="polite"></div>
+<div class="solved-panel" id="solved" hidden>
+  <h2 id="solvedText">Solved!</h2>
+  <button type="button" class="tool primary" id="nextBtn">Next puzzle</button>
+</div>
+<div class="toolbar">
+  <button type="button" class="tool" id="undoBtn">Undo</button>
+  <button type="button" class="tool" id="restartBtn">Restart</button>
+  <button type="button" class="tool" id="checkBtn">Check</button>
+  <button type="button" class="tool" id="hintBtn">Hint</button>
+  <button type="button" class="tool" id="newBtn">New puzzle</button>
+</div>
+<div class="picker-wrap" id="picker"></div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="logic.js"></script>
+<script src="solver.js"></script>
+<script src="puzzles.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const Kit = LogicKit, Game = HashiGame, Logic = HashiLogic, Puzzles = HashiPuzzles;
+  const NS = 'http://www.w3.org/2000/svg';
+  const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+  const counts = { easy: Puzzles.easy.length, medium: Puzzles.medium.length, hard: Puzzles.hard.length };
+  const progress = Kit.createProgress('hashi');
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), msgEl = $('message'), solvedEl = $('solved');
+  const RADIUS = 0.4, GAP = 0.09;
+
+  let id = null, puzzle = null, game = null, timer = null, svg = null;
+  let islEls = [], edgeEls = [], previewEl = null;
+  let marks = new Set();          // edges flagged by Check, until the next move
+  let hinted = -1, solvedNow = false, selected = null, drag = null;
+
+  function svgEl(tag, attrs, cls) {
+    const e = document.createElementNS(NS, tag);
+    if (cls) e.setAttribute('class', cls);
+    Object.keys(attrs || {}).forEach((k) => e.setAttribute(k, attrs[k]));
+    return e;
+  }
+
+  function buildBoard() {
+    const n = puzzle.size;
+    svg = svgEl('svg', { viewBox: `-0.5 -0.5 ${n} ${n}`, preserveAspectRatio: 'xMidYMid meet' }, 'board');
+    svg.setAttribute('role', 'presentation');
+    const dots = svgEl('g');
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) dots.append(svgEl('circle', { cx: c, cy: r, r: 0.045 }, 'dot'));
+    const bridges = svgEl('g'), hits = svgEl('g'), isls = svgEl('g');
+    edgeEls = puzzle.edges.map((e, i) => {
+      const a = puzzle.islands[e.a], b = puzzle.islands[e.b];
+      const hit = svgEl('line', { x1: a.c, y1: a.r, x2: b.c, y2: b.r, 'data-edge': i }, 'hit');
+      hits.append(hit);
+      const lines = [svgEl('line', {}, 'bridge'), svgEl('line', {}, 'bridge')];
+      bridges.append(...lines);
+      return { e, lines };
+    });
+    islEls = puzzle.islands.map((isl, i) => {
+      const g = svgEl('g', { 'data-island': i, tabindex: 0, role: 'button' }, 'isl');
+      g.append(svgEl('circle', { cx: isl.c, cy: isl.r, r: RADIUS }));
+      const t = svgEl('text', { x: isl.c, y: isl.r + 0.03 });
+      t.textContent = isl.n;
+      g.append(t);
+      isls.append(g);
+      return g;
+    });
+    previewEl = svgEl('line', { visibility: 'hidden' }, 'preview-line');
+    svg.append(dots, hits, bridges, previewEl, isls);
+    boardEl.replaceChildren(svg);
+  }
+
+  function placeLines(item, count) {
+    const { e, lines } = item;
+    const a = puzzle.islands[e.a], b = puzzle.islands[e.b];
+    lines.forEach((ln, k) => {
+      const shown = count === 2 || (count === 1 && k === 0);
+      ln.setAttribute('visibility', shown ? 'visible' : 'hidden');
+      if (!shown) return;
+      const off = count === 2 ? (k === 0 ? -GAP : GAP) : 0;
+      const dx = e.dir === 'v' ? off : 0, dy = e.dir === 'h' ? off : 0;
+      ln.setAttribute('x1', a.c + dx); ln.setAttribute('y1', a.r + dy);
+      ln.setAttribute('x2', b.c + dx); ln.setAttribute('y2', b.r + dy);
+    });
+  }
+
+  function render() {
+    const st = game.state();
+    const solved = game.isSolved();
+    const over = new Set(game.conflicts());
+    const totals = Logic.islandTotals(puzzle, st);
+    st.counts.forEach((v, i) => {
+      placeLines(edgeEls[i], v);
+      edgeEls[i].lines.forEach((ln) => {
+        ln.classList.toggle('wrong', marks.has(i));
+        ln.classList.toggle('hinted', i === hinted);
+      });
+    });
+    islEls.forEach((g, i) => {
+      g.classList.toggle('over', over.has(i));
+      g.classList.toggle('done', totals[i] === puzzle.islands[i].n);
+      g.classList.toggle('selected', selected === i);
+      g.classList.toggle('win', solved);
+      g.setAttribute('aria-label', game.describeIsland(i));
+      g.setAttribute('aria-pressed', String(selected === i));
+    });
+    $('undoBtn').disabled = solved || !game.canUndo();
+    ['restartBtn', 'checkBtn', 'hintBtn'].forEach((b) => { $(b).disabled = solved; });
+    boardEl.classList.toggle('locked', solved);
+    boardEl.setAttribute('aria-readonly', String(solved));
+  }
+
+  function say(text) { msgEl.textContent = text || ''; }
+  function tickTime() { timeEl.textContent = Kit.formatTime(timer.elapsed(Date.now())); }
+
+  function persist() {
+    if (!id || solvedNow) return;
+    progress.save(id, Game.buildSave(game.state(), timer.elapsed(Date.now())));
+  }
+
+  function afterMove() {
+    marks = new Set();
+    hinted = -1;
+    say('');
+    render();
+    if (game.isSolved()) return finish();
+    persist();
+  }
+
+  function finish() {
+    solvedNow = true;
+    selected = null;
+    timer.pause(Date.now());
+    tickTime();
+    progress.markSolved(id);
+    progress.clearSave(id);
+    $('solvedText').textContent = `Solved! in ${Kit.formatTime(timer.elapsed(Date.now()))}`;
+    solvedEl.hidden = false;
+    msgEl.hidden = true;
+    renderPicker();
+    render();
+  }
+
+  function renderPicker() {
+    LogicPicker.render($('picker'), { counts, isSolved: progress.isSolved, current: id, onPick: open });
+  }
+
+  function open(newId) {
+    const p = Kit.parsePuzzleId(newId);
+    if (!p || p.n > counts[p.level]) newId = Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1';
+    const parsed = Kit.parsePuzzleId(newId);
+    id = newId;
+    puzzle = Logic.parsePuzzle(Puzzles[parsed.level][parsed.n - 1]);
+    solvedNow = false;
+    marks = new Set();
+    hinted = -1;
+    selected = null;
+    drag = null;
+    solvedEl.hidden = true;
+    say('');
+    msgEl.hidden = false;
+    let start = null, elapsed = 0;
+    if (!progress.isSolved(id)) {
+      const restored = Game.restoreSave(puzzle, progress.loadSave(id));
+      if (restored) { start = restored.state; elapsed = restored.elapsedMs; }
+    }
+    game = Game.createGame(puzzle, start);
+    timer = Game.createTimer(elapsed);
+    progress.setLastPlayed(id);
+    $('label').textContent = `${LEVEL_NAMES[parsed.level]} · Puzzle ${parsed.n}`;
+    buildBoard();
+    renderPicker();
+    render();
+    if (game.isSolved()) return finish();
+    timer.start(Date.now());
+    tickTime();
+  }
+
+  // Input. The pointer position in grid units: (column, row), island centres on whole numbers.
+  function gridPoint(e) {
+    const rect = svg.getBoundingClientRect();
+    const n = puzzle.size;
+    return { x: (e.clientX - rect.left) / rect.width * n - 0.5, y: (e.clientY - rect.top) / rect.height * n - 0.5 };
+  }
+  function showTarget(target) {
+    islEls.forEach((g, i) => g.classList.toggle('target', i === target));
+    if (target < 0 || !drag) { previewEl.setAttribute('visibility', 'hidden'); return; }
+    const a = puzzle.islands[drag.island], b = puzzle.islands[target];
+    previewEl.setAttribute('x1', a.c); previewEl.setAttribute('y1', a.r);
+    previewEl.setAttribute('x2', b.c); previewEl.setAttribute('y2', b.r);
+    previewEl.setAttribute('visibility', 'visible');
+  }
+
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (game.isSolved() || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const isl = e.target.closest ? e.target.closest('[data-island]') : null;
+    const hit = e.target.closest ? e.target.closest('[data-edge]') : null;
+    if (!isl && !hit) return;
+    e.preventDefault();
+    try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const pt = gridPoint(e);
+    drag = { pointerId: e.pointerId, start: pt, island: isl ? Number(isl.dataset.island) : -1, edge: hit ? Number(hit.dataset.edge) : -1, target: -1, moved: false };
+  });
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const pt = gridPoint(e);
+    if (Math.hypot(pt.x - drag.start.x, pt.y - drag.start.y) > 0.3) drag.moved = true;
+    if (drag.island >= 0 && drag.moved) {
+      drag.target = Game.dragTarget(puzzle, drag.island, pt.x, pt.y);
+      showTarget(drag.target);
+    }
+  });
+  function endPointer(e, cancelled) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    showTarget(-1);
+    if (cancelled) return;
+    const pt = gridPoint(e);
+    let changed = false;
+    if (d.island >= 0 && d.moved) {
+      const target = Game.dragTarget(puzzle, d.island, pt.x, pt.y);
+      selected = null;
+      if (target >= 0) changed = game.link(d.island, target);
+      if (!changed) render();
+    } else if (d.island >= 0) {
+      const r = game.tapIsland(selected, d.island);
+      selected = r.selected;
+      changed = r.changed;
+      if (!changed) render();
+    } else if (d.edge >= 0 && !d.moved) {
+      changed = game.cycle(d.edge);
+    }
+    if (changed) afterMove();
+  }
+  boardEl.addEventListener('pointerup', (e) => endPointer(e, false));
+  boardEl.addEventListener('pointercancel', (e) => endPointer(e, true));
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+  // Keyboard: Enter or Space on a focused island works like a tap.
+  boardEl.addEventListener('keydown', (e) => {
+    const isl = e.target.closest ? e.target.closest('[data-island]') : null;
+    if (!isl || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    const r = game.tapIsland(selected, Number(isl.dataset.island));
+    selected = r.selected;
+    if (r.changed) afterMove(); else render();
+  });
+
+  $('undoBtn').addEventListener('click', () => { selected = null; if (game.undo()) afterMove(); });
+  $('restartBtn').addEventListener('click', () => {
+    selected = null;
+    game.clear();
+    timer.reset();
+    timer.start(Date.now());
+    tickTime();
+    afterMove();
+  });
+  $('checkBtn').addEventListener('click', () => {
+    const bad = game.mistakes();
+    marks = new Set(bad);
+    hinted = -1;
+    render();
+    say(bad.length ? `${bad.length} wrong ${bad.length === 1 ? 'bridge' : 'bridges'}` : 'No wrong bridges so far');
+  });
+  $('hintBtn').addEventListener('click', () => {
+    const h = game.applyHint();
+    if (!h) return;
+    selected = null;
+    afterMove();
+    if (game.isSolved()) return;
+    hinted = h.edge;
+    render();
+    say(h.reason);
+  });
+  function goNext() { open(Game.nextPuzzleId(counts, progress.isSolved, id)); }
+  $('nextBtn').addEventListener('click', goNext);
+  $('newBtn').addEventListener('click', goNext);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!timer || solvedNow) return;
+    if (document.hidden) { timer.pause(Date.now()); persist(); } else { timer.start(Date.now()); }
+  });
+  window.addEventListener('pagehide', () => { if (timer && !solvedNow) { timer.pause(Date.now()); persist(); } });
+  setInterval(() => { if (timer) tickTime(); }, 500);
+
+  open(progress.lastPlayed() || Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1');
+}());
+</script>
+</body>
+</html>
