@@ -83,3 +83,12 @@ test('futoshiki board sizes itself from the visible height (dvh) and leaves room
   // every vh fallback is followed by its dvh twin
   rules.forEach((r, i) => { if (!r.includes('dvh')) assert.ok(rules[i + 1] && rules[i + 1].includes('dvh'), 'vh rule has a dvh rule after it'); });
 });
+
+test('hashi board leaves room for the buttons and level tabs under it', () => {
+  const rules = sizeRules(read('hashi', 'index.html'));
+  assert.ok(rules.length > 0);
+  const portrait = rules.filter((r) => r.includes('100dvh'))[0];
+  assert.ok(portrait, 'uses dvh');
+  const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
+});
