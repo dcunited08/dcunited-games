@@ -36,6 +36,15 @@ test('numberlink board leaves room for the buttons and level tabs under it', () 
   assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
 });
 
+test('slitherlink board leaves room for the buttons and level tabs under it', () => {
+  const rules = sizeRules(read('slitherlink', 'index.html'));
+  assert.ok(rules.length > 0);
+  const portrait = rules.filter((r) => r.includes('100dvh'))[0];
+  assert.ok(portrait, 'uses dvh');
+  const overhead = Number(portrait.match(/100dvh\s*-\s*(\d+)px/)[1]);
+  assert.ok(overhead >= 480, `reserves at least 480px for the other controls (got ${overhead})`);
+});
+
 test('logic-grid page fits the visible height: 100dvh body that never scrolls', () => {
   const html = read('logic-grid', 'index.html');
   assert.match(html, /height:\s*100dvh/);
