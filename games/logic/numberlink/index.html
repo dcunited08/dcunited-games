@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Numberlink</title>
+<link rel="stylesheet" href="../../shared.css">
+<link rel="stylesheet" href="../logic.css">
+<style>
+  body { gap: 8px; }
+  .rules { width: min(100%, 720px); margin: 0; text-align: center; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .rules b { color: var(--text); }
+  .puzzle-board {
+    --size: min(100%, 720px, calc(100vh - 500px));
+    --size: min(100%, 720px, calc(100dvh - 500px));
+    min-width: min(100%, 300px);
+    display: block;
+    background: var(--panel);
+    touch-action: none;
+    position: relative;
+    -webkit-touch-callout: none;
+  }
+  .puzzle-board:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .puzzle-board svg { display: block; width: 100%; height: 100%; touch-action: none; }
+  .grid-line { stroke: rgba(15, 35, 64, 0.2); stroke-width: 0.025; }
+  .run { fill: none; stroke-width: 0.36; stroke-linecap: round; stroke-linejoin: round; }
+  .tint { fill-opacity: 0.2; }
+  .dot-num { fill: #fff; font: 800 0.46px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .dot { stroke: #fff; stroke-width: 0.05; }
+  .bad { fill: var(--cell-error); stroke: var(--error-text); stroke-width: 0.06; }
+  .cursor { fill: none; stroke: var(--text); stroke-width: 0.07; stroke-dasharray: 0.18 0.1; }
+  .hinted { animation: hintpulse 1.2s ease-out; }
+  @keyframes hintpulse { 0% { stroke-width: 0.7; opacity: 0.6; } 100% { stroke-width: 0.36; opacity: 1; } }
+  .board-wrap { width: min(100%, 720px); display: flex; justify-content: center; position: relative; }
+  .board-wrap .puzzle-board { width: var(--size); }
+  .puzzle-board.locked { cursor: default; }
+  .info { width: min(100%, 720px); display: flex; justify-content: space-between; gap: 12px; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .info b { color: var(--text); }
+  .message { min-height: 1.5em; }
+  .picker { gap: 8px; }
+  .puzzle-list { gap: 6px; }
+  .solved-panel {
+    width: min(100%, 720px); text-align: center; padding: 12px; border-radius: 14px;
+    background: var(--panel); border: 2px solid var(--accent);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .solved-panel[hidden] { display: none; }
+  .solved-panel h2 { margin: 0; font-size: 26px; }
+  .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .primary:hover { background: var(--accent-hover); }
+  .picker-wrap { width: min(100%, 720px); }
+  /* Once solved, the tools are all disabled, so make room for the solved panel. */
+  body.done .toolbar, body.done .rules { display: none; }
+  @media (prefers-reduced-motion: reduce) { .hinted { animation: none; } }
+  /* Wide and short (iPad landscape): board on the left, everything else in a column on the right. */
+  @media (min-aspect-ratio: 11/10) and (max-height: 900px) {
+    body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); grid-auto-rows: min-content; align-content: start; column-gap: 20px; row-gap: 8px; align-items: start; }
+    body > * { grid-column: 2; width: 100%; }
+    body > .board-wrap { grid-column: 1; grid-row: 1 / span 9; width: 100%; align-self: start; }
+    .puzzle-board { --size: min(calc(100vw - 460px), 720px, calc(100vh - 40px)); --size: min(calc(100vw - 460px), 720px, calc(100dvh - 40px)); }
+    h1 { font-size: 24px; text-align: left; }
+    .rules { text-align: left; }
+    .crumbs { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<nav class="crumbs">
+  <a class="back-link" href="../index.html">← Logic puzzles</a>
+  <a class="home-link" href="../../../index.html">All games</a>
+</nav>
+<h1>Numberlink</h1>
+<p class="rules">Join each pair of matching numbered dots with a line. Lines can't cross or branch, and together they must fill every square.<br><b>Drag</b> from a dot. <b>Tap</b> a dot to clear its line.</p>
+<div class="info"><span id="label"></span><span>Time <b id="time">0:00</b></span></div>
+<div class="board-wrap"><div id="board" class="puzzle-board" tabindex="0" aria-label="Numberlink board. Arrow keys move, Space starts or ends a line."></div></div>
+<div class="status message" id="message" aria-live="polite"></div>
+<div class="solved-panel" id="solved" hidden>
+  <h2 id="solvedText">Solved!</h2>
+  <button type="button" class="tool primary" id="nextBtn">Next puzzle</button>
+</div>
+<div class="toolbar">
+  <button type="button" class="tool" id="undoBtn">Undo</button>
+  <button type="button" class="tool" id="restartBtn">Restart</button>
+  <button type="button" class="tool" id="checkBtn">Check</button>
+  <button type="button" class="tool" id="hintBtn">Hint</button>
+  <button type="button" class="tool" id="newBtn">New puzzle</button>
+</div>
+<div class="picker-wrap" id="picker"></div>
+
+<script src="../kit.js"></script>
+<script src="../picker.js"></script>
+<script src="logic.js"></script>
+<script src="solver.js"></script>
+<script src="puzzles.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const Kit = LogicKit, Game = NumberlinkGame, Logic = NumberlinkLogic, Puzzles = NumberlinkPuzzles;
+  const NS = 'http://www.w3.org/2000/svg';
+  // Eleven colors that stay apart on a light background (each dot also shows its number).
+  const COLORS = ['#d93a3a', '#2563eb', '#16a34a', '#ea7a00', '#9333ea', '#0ea5e9', '#db2777', '#92400e', '#65a30d', '#475569', '#0f766e'];
+  const LEVEL_NAMES = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+  const counts = { easy: Puzzles.easy.length, medium: Puzzles.medium.length, hard: Puzzles.hard.length };
+  const progress = Kit.createProgress('numberlink');
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), timeEl = $('time'), msgEl = $('message'), solvedEl = $('solved');
+
+  let id = null, puzzle = null, game = null, timer = null, svg = null;
+  let marks = new Set();          // cells flagged by Check, until the next move
+  let hinted = null, solvedNow = false, dragging = null, cursor = 0, ticker = null;
+
+  const el = (tag, attrs, parent) => {
+    const e = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach((k) => e.setAttribute(k, attrs[k]));
+    if (parent) parent.append(e);
+    return e;
+  };
+  const colorOf = (pid) => COLORS[puzzle.ids.indexOf(pid) % COLORS.length];
+
+  function buildBoard() {
+    const n = puzzle.size;
+    boardEl.replaceChildren();
+    svg = el('svg', { viewBox: `0 0 ${n} ${n}`, role: 'img', 'aria-hidden': 'true' });
+    boardEl.append(svg);
+  }
+
+  function render() {
+    const n = puzzle.size;
+    const st = game.state();
+    const solved = game.isSolved();
+    svg.replaceChildren();
+    const tints = el('g', {}, svg), grid = el('g', {}, svg), flags = el('g', {}, svg), runs = el('g', {}, svg), dots = el('g', {}, svg);
+    puzzle.ids.forEach((pid) => {
+      st.lines[pid].forEach((c) => el('rect', { class: 'tint', x: c % n, y: Math.floor(c / n), width: 1, height: 1, fill: colorOf(pid) }, tints));
+    });
+    for (let i = 1; i < n; i++) {
+      el('line', { class: 'grid-line', x1: i, y1: 0, x2: i, y2: n }, grid);
+      el('line', { class: 'grid-line', x1: 0, y1: i, x2: n, y2: i }, grid);
+    }
+    marks.forEach((c) => el('rect', { class: 'bad', x: (c % n) + 0.03, y: Math.floor(c / n) + 0.03, width: 0.94, height: 0.94 }, flags));
+    puzzle.ids.forEach((pid) => {
+      const line = st.lines[pid];
+      if (line.length < 2) return;
+      const pts = line.map((c) => `${(c % n) + 0.5},${Math.floor(c / n) + 0.5}`).join(' ');
+      el('polyline', { class: 'run' + (pid === hinted ? ' hinted' : ''), points: pts, stroke: colorOf(pid) }, runs);
+    });
+    puzzle.ids.forEach((pid) => puzzle.dots[pid].forEach((c) => {
+      const x = (c % n) + 0.5, y = Math.floor(c / n) + 0.5;
+      el('circle', { class: 'dot', cx: x, cy: y, r: 0.34, fill: colorOf(pid) }, dots);
+      el('text', { class: 'dot-num', x, y: y + 0.02 }, dots).textContent = pid;
+    }));
+    if (document.activeElement === boardEl && !solved) {
+      el('rect', { class: 'cursor', x: (cursor % n) + 0.06, y: Math.floor(cursor / n) + 0.06, width: 0.88, height: 0.88 }, svg);
+    }
+    $('undoBtn').disabled = solved || !game.canUndo();
+    ['restartBtn', 'checkBtn', 'hintBtn'].forEach((b) => { $(b).disabled = solved; });
+    boardEl.classList.toggle('locked', solved);
+    boardEl.setAttribute('aria-readonly', String(solved));
+  }
+
+  function say(text) { msgEl.textContent = text || ''; }
+  function tickTime() { timeEl.textContent = Kit.formatTime(timer.elapsed(Date.now())); }
+
+  function persist() {
+    if (!id || solvedNow) return;
+    progress.save(id, Game.buildSave(game.state(), timer.elapsed(Date.now())));
+  }
+
+  function afterMove() {
+    marks = new Set();
+    hinted = null;
+    say(game.status() === 'joined' ? 'All joined. Now fill every square.' : '');
+    render();
+    if (game.isSolved()) return finish();
+    persist();
+  }
+
+  function finish() {
+    solvedNow = true;
+    timer.pause(Date.now());
+    tickTime();
+    progress.markSolved(id);
+    progress.clearSave(id);
+    say('');
+    $('solvedText').textContent = `Solved! in ${Kit.formatTime(timer.elapsed(Date.now()))}`;
+    solvedEl.hidden = false;
+    document.body.classList.add('done');
+    renderPicker();
+    render();
+  }
+
+  function renderPicker() {
+    LogicPicker.render($('picker'), { counts, isSolved: progress.isSolved, current: id, onPick: open });
+  }
+
+  function open(newId) {
+    const p = Kit.parsePuzzleId(newId);
+    if (!p || p.n > counts[p.level]) newId = Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1';
+    const parsed = Kit.parsePuzzleId(newId);
+    id = newId;
+    puzzle = Logic.parsePuzzle(Puzzles[parsed.level][parsed.n - 1]);
+    solvedNow = false;
+    marks = new Set();
+    hinted = null;
+    dragging = null;
+    cursor = 0;
+    solvedEl.hidden = true;
+    document.body.classList.remove('done');
+    say('');
+    let start = null, elapsed = 0;
+    if (!progress.isSolved(id)) {
+      const restored = Game.restoreSave(puzzle, progress.loadSave(id));
+      if (restored) { start = restored.state; elapsed = restored.elapsedMs; }
+    }
+    game = Game.createGame(puzzle, start);
+    timer = Game.createTimer(elapsed);
+    progress.setLastPlayed(id);
+    $('label').textContent = `${LEVEL_NAMES[parsed.level]} · Puzzle ${parsed.n}`;
+    buildBoard();
+    renderPicker();
+    render();
+    if (game.isSolved()) return finish();
+    if (game.status() === 'joined') say('All joined. Now fill every square.');
+    timer.start(Date.now());
+    tickTime();
+  }
+
+  // Input: pointer events on the board. The cell comes from the board's own
+  // rectangle, so a fast drag still lands on the right square.
+  function cellAt(x, y) {
+    const r = svg.getBoundingClientRect();
+    const n = puzzle.size;
+    const c = Math.floor(((x - r.left) / r.width) * n);
+    const row = Math.floor(((y - r.top) / r.height) * n);
+    return c < 0 || row < 0 || c >= n || row >= n ? -1 : row * n + c;
+  }
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (game.isSolved() || dragging !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0) return;
+    e.preventDefault();
+    if (!game.beginStroke(i)) return;
+    try { boardEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    dragging = e.pointerId;
+    cursor = i;
+    marks = new Set();
+    hinted = null;
+    render();
+  });
+  boardEl.addEventListener('pointermove', (e) => {
+    if (dragging !== e.pointerId) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i >= 0 && game.moveStroke(i)) render();
+  });
+  function endPointer(e) {
+    if (dragging !== e.pointerId) return;
+    dragging = null;
+    game.endStroke();
+    afterMove();
+  }
+  boardEl.addEventListener('pointerup', endPointer);
+  boardEl.addEventListener('pointercancel', endPointer);
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Keyboard: arrows move the cursor, Space/Enter starts a line there and ends it.
+  boardEl.addEventListener('keydown', (e) => {
+    const n = puzzle.size;
+    const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    if (d) {
+      e.preventDefault();
+      const r = Math.floor(cursor / n) + d[0], c = (cursor % n) + d[1];
+      if (r >= 0 && c >= 0 && r < n && c < n) {
+        cursor = r * n + c;
+        if (game.strokeActive()) game.moveStroke(cursor);
+      }
+      render();
+    } else if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      if (game.strokeActive()) { game.endStroke(); afterMove(); } else if (e.key !== 'Escape' && game.beginStroke(cursor)) render();
+    }
+  });
+  boardEl.addEventListener('focus', () => { if (game) render(); });
+  boardEl.addEventListener('blur', () => { if (game) { if (game.strokeActive() && dragging === null) { game.endStroke(); afterMove(); } else render(); } });
+
+  $('undoBtn').addEventListener('click', () => { if (game.undo()) afterMove(); });
+  $('restartBtn').addEventListener('click', () => {
+    game.clear();
+    timer.reset();
+    timer.start(Date.now());
+    tickTime();
+    afterMove();
+  });
+  $('checkBtn').addEventListener('click', () => {
+    const bad = game.mistakes();
+    marks = new Set(bad);
+    hinted = null;
+    render();
+    say(bad.length ? `${bad.length} ${bad.length === 1 ? 'mistake' : 'mistakes'}` : 'No mistakes so far');
+  });
+  $('hintBtn').addEventListener('click', () => {
+    const h = game.applyHint();
+    if (!h) return;
+    afterMove();
+    hinted = h.id;
+    render();
+    say(h.reason);
+  });
+  function goNext() { open(Game.nextPuzzleId(counts, progress.isSolved, id)); }
+  $('nextBtn').addEventListener('click', goNext);
+  $('newBtn').addEventListener('click', goNext);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!timer || solvedNow) return;
+    if (document.hidden) { timer.pause(Date.now()); persist(); } else { timer.start(Date.now()); }
+  });
+  window.addEventListener('pagehide', () => { if (timer && !solvedNow) { timer.pause(Date.now()); persist(); } });
+  ticker = setInterval(() => { if (timer) tickTime(); }, 500);
+
+  open(progress.lastPlayed() || Kit.nextUnsolved(counts, progress.isSolved, 'easy') || 'easy-1');
+}());
+</script>
+</body>
+</html>
